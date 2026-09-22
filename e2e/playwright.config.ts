@@ -49,7 +49,7 @@ export default defineConfig({
 	webServer: targets.map((t) => ({
 		// Run only the dev server (not `npm start`, which also spawns the
 		// contract-watch process that needs Docker/network).
-		command: `npx vite --port ${t.port} --strictPort`,
+		command: `pnpm exec next dev --port ${t.port}`,
 		cwd: t.cwd,
 		url: `http://localhost:${t.port}`,
 		reuseExistingServer: !process.env.CI,

@@ -21,9 +21,7 @@ export function getFriendbotUrl(address: string) {
  * Fund an account via Friendbot. Returns a result the caller can surface as a
  * notification — framework-agnostic (no UI/state concerns here).
  */
-export async function fundAccount(
-	address: string,
-): Promise<{ ok: boolean; message: string }> {
+export async function fundAccount(address: string): Promise<{ ok: boolean; message: string }> {
 	try {
 		const response = await fetch(getFriendbotUrl(address))
 		if (response.ok) {

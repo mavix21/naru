@@ -8,10 +8,7 @@ export type SubscriptionEvent = Api.EventResponse
 
 type PagingKey = string
 
-const paging: Record<
-	PagingKey,
-	{ lastLedgerStart?: number; pagingToken?: string }
-> = {}
+const paging: Record<PagingKey, { lastLedgerStart?: number; pagingToken?: string }> = {}
 
 // NOTE: Server is configured using envvars which shouldn't change during runtime
 const server = new Server(rpcUrl, { allowHttp: stellarNetwork === "LOCAL" })
@@ -80,10 +77,7 @@ export function subscribeToEvents(
 					try {
 						onEvent(event)
 					} catch (error) {
-						console.error(
-							"Poll Events: subscription callback had error: ",
-							error,
-						)
+						console.error("Poll Events: subscription callback had error: ", error)
 					}
 				})
 				if (response.cursor) {

@@ -23,8 +23,6 @@ test("contract explorer link is present", async ({ page }) => {
 
 test("guess-the-number sample contract form is present", async ({ page }) => {
 	await page.goto("/")
-	await expect(
-		page.getByPlaceholder("Guess a number from 1 to 10!"),
-	).toBeVisible()
+	await expect(page.getByPlaceholder("Guess a number from 1 to 10!")).toBeVisible()
 	await expect(page.getByRole("button", { name: "Submit" })).toBeVisible()
 })

@@ -1,10 +1,9 @@
-import { stellarNetwork } from "@stellar-scaffold/app-lib"
-import React from "react"
+import { stellarNetwork } from "@stellar-scaffold/app-lib/env"
 import FundAccountButton from "./FundAccountButton"
 import NetworkPill from "./NetworkPill"
 import { WalletButton } from "./WalletButton"
 
-const ConnectAccount: React.FC = () => {
+const ConnectAccount = () => {
 	return (
 		<div className="connect-account">
 			<NetworkPill />

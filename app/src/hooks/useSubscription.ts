@@ -1,7 +1,4 @@
-import {
-	subscribeToEvents,
-	type SubscriptionEvent,
-} from "@stellar-scaffold/app-lib"
+import { subscribeToEvents, type SubscriptionEvent } from "@stellar-scaffold/app-lib"
 import { useEffect } from "react"
 
 export function useSubscription(

@@ -1,7 +1,9 @@
-import { fundAccount } from "@stellar-scaffold/app-lib"
+"use client"
+
+import { fundAccount } from "@stellar-scaffold/app-lib/friendbot"
 import React, { useTransition } from "react"
-import { useNotification } from "../hooks/useNotification.ts"
-import { useWallet } from "../hooks/useWallet.ts"
+import { useNotification } from "../hooks/useNotification"
+import { useWallet } from "../hooks/useWallet"
 
 const FundAccountButton: React.FC = () => {
 	const { addNotification } = useNotification()

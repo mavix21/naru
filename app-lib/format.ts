@@ -2,14 +2,11 @@ import { Networks } from "@creit.tech/stellar-wallets-kit"
 import { networkPassphrase, stellarNetwork } from "./env"
 
 /** Shorten a Stellar address/contract id: first 4 + last 4, ellipsised. */
-export const shortAddress = (addr: string): string =>
-	`${addr.slice(0, 4)}...${addr.slice(-4)}`
+export const shortAddress = (addr: string): string => `${addr.slice(0, 4)}...${addr.slice(-4)}`
 
 /** Human-friendly network label (STANDALONE → Local; otherwise capitalized). */
 export const formatNetworkName = (name: string): string =>
-	name === "STANDALONE"
-		? "Local"
-		: name.charAt(0).toUpperCase() + name.slice(1).toLowerCase()
+	name === "STANDALONE" ? "Local" : name.charAt(0).toUpperCase() + name.slice(1).toLowerCase()
 
 /** Reverse lookup of a network passphrase to its `Networks` enum key. */
 const passphraseToName: Record<string, string> = Object.fromEntries(

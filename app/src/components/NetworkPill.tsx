@@ -1,4 +1,6 @@
-import { networkStatus } from "@stellar-scaffold/app-lib"
+"use client"
+
+import { networkStatus } from "@stellar-scaffold/app-lib/format"
 import React from "react"
 import { useWallet } from "../hooks/useWallet"
 

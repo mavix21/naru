@@ -1,5 +1,6 @@
 # Build output
 dist
+.next
 build
 .svelte-kit
 target
@@ -18,3 +19,5 @@ app-lib/clients
 # Test output
 test-results
 playwright-report
+.agents
+skills-lock.json

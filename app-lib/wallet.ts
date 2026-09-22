@@ -1,8 +1,4 @@
-import {
-	KitEventType,
-	type Networks,
-	StellarWalletsKit,
-} from "@creit.tech/stellar-wallets-kit"
+import { KitEventType, type Networks, StellarWalletsKit } from "@creit.tech/stellar-wallets-kit"
 import { defaultModules } from "@creit.tech/stellar-wallets-kit/modules/utils"
 import { Horizon } from "@stellar/stellar-sdk"
 import { networkPassphrase, stellarNetwork } from "./env"
@@ -102,29 +98,22 @@ export interface WalletState {
  *
  * Returns an framework-agnostic unsubscribe function.
  */
-export const onWalletChange = (
-	cb: (state: WalletState) => void,
-): (() => void) => {
+export const onWalletChange = (cb: (state: WalletState) => void): (() => void) => {
 	let stopPoll: (() => void) | undefined
 
-	const stopState = StellarWalletsKit.on(
-		KitEventType.STATE_UPDATED,
-		(event) => {
-			stopPoll?.()
-			stopPoll = undefined
-			// NOTE: `event.networkPassphrase` is the app's configured network, not
-			// the wallet's connected network. Disregard it and start our own polling
-			// logic below if we have an address.
-			const { address } = event.payload
-			if (address) {
-				stopPoll = onWalletNetworkChange((networkPassphrase) =>
-					cb({ address, networkPassphrase }),
-				)
-			} else {
-				cb({ address: undefined, networkPassphrase: undefined })
-			}
-		},
-	)
+	const stopState = StellarWalletsKit.on(KitEventType.STATE_UPDATED, (event) => {
+		stopPoll?.()
+		stopPoll = undefined
+		// NOTE: `event.networkPassphrase` is the app's configured network, not
+		// the wallet's connected network. Disregard it and start our own polling
+		// logic below if we have an address.
+		const { address } = event.payload
+		if (address) {
+			stopPoll = onWalletNetworkChange((networkPassphrase) => cb({ address, networkPassphrase }))
+		} else {
+			cb({ address: undefined, networkPassphrase: undefined })
+		}
+	})
 
 	const stopDisconnect = StellarWalletsKit.on(KitEventType.DISCONNECT, () => {
 		stopPoll?.()

@@ -7,7 +7,7 @@ _Under active development._
 
 A modern, up-to-date toolkit for building Stellar smart contract frontends.
 
-- ⚡️ Vite + React + TypeScript
+- ⚡️ Next.js + React + TypeScript
 - 🔗 Auto-generated contract clients
 - 🧩 Example components for contract interaction
 - 🛠 Hot reload for contract changes
@@ -117,5 +117,5 @@ my-project/                      # Your initialized project
 
 This template provides a ready-to-use frontend application with example smart
 contracts and their TypeScript clients. You can use these as reference while
-building your own contracts and UI. The frontend is set up with Vite, React, and
+building your own contracts and UI. The frontend is set up with Next.js, React, and
 includes basic components for interacting with the contracts.

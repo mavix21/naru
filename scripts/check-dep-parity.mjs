@@ -11,29 +11,24 @@
 //
 // Edit MUST_MATCH to curate which shared deps are enforced.
 
-import { readFileSync, readdirSync } from "node:fs"
+import { existsSync, readFileSync, readdirSync } from "node:fs"
 import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 
-const MUST_MATCH = [
-	"vite",
-	"vite-plugin-node-polyfills",
-	"vite-plugin-wasm",
-	"typescript",
-	"eslint",
-	"prettier",
-	"@theahaco/ts-config",
-]
+const MUST_MATCH = ["next", "typescript", "oxlint", "oxfmt", "@theahaco/ts-config"]
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 const templatesDir = join(repoRoot, "templates")
 
+if (!existsSync(templatesDir)) {
+	console.log("No templates directory; skipping cross-template dependency parity.")
+	process.exit(0)
+}
+
 const templates = readdirSync(templatesDir, { withFileTypes: true })
 	.filter((d) => d.isDirectory())
 	.map((d) => {
-		const pkg = JSON.parse(
-			readFileSync(join(templatesDir, d.name, "package.json"), "utf8"),
-		)
+		const pkg = JSON.parse(readFileSync(join(templatesDir, d.name, "package.json"), "utf8"))
 		return {
 			name: d.name,
 			deps: { ...pkg.dependencies, ...pkg.devDependencies },
@@ -74,9 +69,7 @@ for (const dep of MUST_MATCH) {
 
 	if (breakingSet.size > 1) {
 		failed = true
-		lines.push(
-			`❌ ${dep.padEnd(30)} ${shown}   (MAJOR drift — fix before merge)`,
-		)
+		lines.push(`❌ ${dep.padEnd(30)} ${shown}   (MAJOR drift — fix before merge)`)
 	} else if (baseSet.size > 1) {
 		lines.push(`⚠️  ${dep.padEnd(30)} ${shown}   (minor/patch drift — allowed)`)
 	} else {
@@ -84,9 +77,7 @@ for (const dep of MUST_MATCH) {
 	}
 }
 
-console.log(
-	`Template dependency parity (${templates.map((t) => t.name).join(", ")}):\n`,
-)
+console.log(`Template dependency parity (${templates.map((t) => t.name).join(", ")}):\n`)
 console.log(lines.join("\n"))
 
 if (failed) {

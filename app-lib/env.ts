@@ -1,4 +1,3 @@
-import { Networks } from "@creit.tech/stellar-wallets-kit"
 import { z } from "zod"
 
 type NetworkType = "mainnet" | "testnet" | "futurenet" | "local"
@@ -19,26 +18,30 @@ const envSchema = z.object({
 		"LOCAL",
 		"STANDALONE", // deprecated in favor of LOCAL
 	] as const),
-	PUBLIC_STELLAR_NETWORK_PASSPHRASE: z.enum(Networks),
+	PUBLIC_STELLAR_NETWORK_PASSPHRASE: z.string(),
 	PUBLIC_STELLAR_RPC_URL: z.string(),
 	PUBLIC_STELLAR_HORIZON_URL: z.string(),
 })
 
-const parsed = envSchema.safeParse(import.meta.env)
+// Next.js inlines NEXT_PUBLIC_ values into client bundles at build time.
+const parsed = envSchema.safeParse({
+	PUBLIC_STELLAR_NETWORK: process.env.NEXT_PUBLIC_STELLAR_NETWORK,
+	PUBLIC_STELLAR_NETWORK_PASSPHRASE: process.env.NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE,
+	PUBLIC_STELLAR_RPC_URL: process.env.NEXT_PUBLIC_STELLAR_RPC_URL,
+	PUBLIC_STELLAR_HORIZON_URL: process.env.NEXT_PUBLIC_STELLAR_HORIZON_URL,
+})
 
 const env: z.infer<typeof envSchema> = parsed.success
 	? parsed.data
 	: {
 			PUBLIC_STELLAR_NETWORK: "LOCAL",
-			PUBLIC_STELLAR_NETWORK_PASSPHRASE: Networks.STANDALONE,
+			PUBLIC_STELLAR_NETWORK_PASSPHRASE: "Standalone Network ; February 2017",
 			PUBLIC_STELLAR_RPC_URL: "http://localhost:8000/rpc",
 			PUBLIC_STELLAR_HORIZON_URL: "http://localhost:8000",
 		}
 
 export const stellarNetwork =
-	env.PUBLIC_STELLAR_NETWORK === "STANDALONE"
-		? "LOCAL"
-		: env.PUBLIC_STELLAR_NETWORK
+	env.PUBLIC_STELLAR_NETWORK === "STANDALONE" ? "LOCAL" : env.PUBLIC_STELLAR_NETWORK
 export const networkPassphrase = env.PUBLIC_STELLAR_NETWORK_PASSPHRASE
 
 const stellarEncode = (str: string) => {

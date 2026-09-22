@@ -9,7 +9,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   PKG_CONFIG_PATH: /usr/lib/pkgconfig
-  PUBLIC_STELLAR_NETWORK: local
+  NEXT_PUBLIC_STELLAR_NETWORK: LOCAL
 
 jobs:
   build:
@@ -27,7 +27,14 @@ jobs:
       - name: Check template dependency parity
         run: node scripts/check-dep-parity.mjs
 
-      - run: npm ci
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
       - run: npm run lint
       - run: npm run format:check
 
@@ -44,8 +51,7 @@ jobs:
             ~/.cargo/git/db/
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-      - run:
-          sudo apt-get update && sudo apt-get install -y libudev-dev
+      - run: sudo apt-get update && sudo apt-get install -y libudev-dev
           libdbus-1-dev pkg-config
       # Install binstall to quickly install stellar-scaffold-cli
       - name: Install cargo-binstall
@@ -56,8 +62,7 @@ jobs:
       - name: Resolve CLI source
         id: cli
         env:
-          CROSS_REPO:
-            ${{ contains(github.event.pull_request.labels.*.name, 'cross-repo')
+          CROSS_REPO: ${{ contains(github.event.pull_request.labels.*.name, 'cross-repo')
             }}
         run: |
           REF="${{ github.head_ref }}"
@@ -102,8 +107,7 @@ jobs:
           path: ~/.cargo/bin/stellar-scaffold
           key: cli-bin-${{ runner.os }}-${{ steps.cli.outputs.sha }}
       - name: Install stellar-scaffold (from CLI branch)
-        if:
-          steps.cli.outputs.ref != '' && steps.cli-cache.outputs.cache-hit !=
+        if: steps.cli.outputs.ref != '' && steps.cli-cache.outputs.cache-hit !=
           'true'
         run: |
           # `cargo install --git` builds with the runner's default toolchain and

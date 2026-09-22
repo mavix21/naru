@@ -1,0 +1,66 @@
+name: dApp Next.js server build
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches: [dapp_production]
+
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build deployable Next.js server
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      attestations: write
+    environment:
+      name: dapp-ipfs
+    defaults:
+      run:
+        working-directory: ./
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install App dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build app
+        env:
+          NEXT_PUBLIC_STELLAR_NETWORK: ${{ vars.PUBLIC_STELLAR_NETWORK }}
+          NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE: ${{ vars.PUBLIC_STELLAR_NETWORK_PASSPHRASE }}
+          NEXT_PUBLIC_STELLAR_RPC_URL: ${{ vars.PUBLIC_STELLAR_RPC_URL }}
+          NEXT_PUBLIC_STELLAR_HORIZON_URL: ${{ vars.PUBLIC_PUBLIC_STELLAR_HORIZON_URL }}
+        run: pnpm --dir app build
+
+      - name: Assemble standalone server
+        run: |
+          cp -R app/.next/static app/.next/standalone/app/.next/static
+          cp -R app/public app/.next/standalone/app/public
+
+      - name: Generate artifact attestation for server build
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a
+        with:
+          subject-path: "app/.next/standalone/app/server.js"
+
+      - name: Archive server build
+        uses: actions/upload-artifact@v5
+        with:
+          name: next-server
+          include-hidden-files: true
+          path: |
+            app/.next/standalone/

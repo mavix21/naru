@@ -11,6 +11,8 @@ test_snapshots
 # build output
 dist
 dist-ssr
+.next
+app/next-env.d.ts
 
 # dependencies
 node_modules/

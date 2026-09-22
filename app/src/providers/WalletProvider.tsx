@@ -1,9 +1,6 @@
-import {
-	fetchBalances,
-	type MappedBalances,
-	onWalletChange,
-	signTransaction,
-} from "@stellar-scaffold/app-lib"
+"use client"
+
+import type { MappedBalances } from "@stellar-scaffold/app-lib/wallet"
 import { createContext, useCallback, useEffect, useMemo, useState } from "react"
 
 /**
@@ -18,8 +15,7 @@ function deepEqual<T>(a: T, b: T): boolean {
 		return true
 	}
 
-	const bothAreObjects =
-		a && b && typeof a === "object" && typeof b === "object"
+	const bothAreObjects = a && b && typeof a === "object" && typeof b === "object"
 
 	return Boolean(
 		bothAreObjects &&
@@ -33,17 +29,21 @@ export interface WalletContextType {
 	balances: MappedBalances
 	isPending: boolean
 	networkPassphrase?: string
-	signTransaction: typeof signTransaction
+	signTransaction: typeof import("@stellar-scaffold/app-lib/wallet").signTransaction
 	updateBalances: () => Promise<void>
 }
 
-export const WalletContext = // @ts-ignore
-	createContext<WalletContextType>({
-		isPending: true,
-		balances: {},
-		updateBalances: async () => {},
-		signTransaction,
-	})
+const signTransaction: WalletContextType["signTransaction"] = async (...args) => {
+	const wallet = await import("@stellar-scaffold/app-lib/wallet")
+	return wallet.signTransaction(...args)
+}
+
+export const WalletContext = createContext<WalletContextType>({
+	isPending: true,
+	balances: {},
+	updateBalances: async () => {},
+	signTransaction,
+})
 
 export const WalletProvider = ({ children }: { children: React.ReactNode }) => {
 	const [balances, setBalances] = useState<MappedBalances>({})
@@ -52,11 +52,9 @@ export const WalletProvider = ({ children }: { children: React.ReactNode }) => {
 	const [isPending, setIsPending] = useState(true)
 
 	const updateBalances = useCallback(async () => {
-		if (!address) {
-			setBalances({})
-			return
-		}
+		if (!address) return
 
+		const { fetchBalances } = await import("@stellar-scaffold/app-lib/wallet")
 		const newBalances = await fetchBalances(address)
 		setBalances((prev) => {
 			if (deepEqual(newBalances, prev)) return prev
@@ -67,18 +65,28 @@ export const WalletProvider = ({ children }: { children: React.ReactNode }) => {
 	// Refetch on address change (via `updateBalances`' identity) and on network
 	// change — the same address holds different balances per network.
 	useEffect(() => {
+		// oxlint-disable-next-line react/set-state-in-effect -- balances come from an asynchronous wallet/network request.
 		void updateBalances()
 	}, [updateBalances, networkPassphrase])
 
 	// Subscribe to wallet state. Gets values immediately and on every subsequent
 	// change: connect, disconnect, and the wallet switching networks.
 	useEffect(() => {
-		return onWalletChange((state) => {
-			setAddress(state.address)
-			setNetworkPassphrase(state.networkPassphrase)
-			setIsPending(false)
-			if (!state.address) setBalances({})
+		let unsubscribe: (() => void) | undefined
+		let mounted = true
+		void import("@stellar-scaffold/app-lib/wallet").then(({ onWalletChange }) => {
+			if (!mounted) return
+			unsubscribe = onWalletChange((state) => {
+				setAddress(state.address)
+				setNetworkPassphrase(state.networkPassphrase)
+				setIsPending(false)
+				if (!state.address) setBalances({})
+			})
 		})
+		return () => {
+			mounted = false
+			unsubscribe?.()
+		}
 	}, [])
 
 	const contextValue = useMemo(
