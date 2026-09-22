@@ -62,7 +62,8 @@ jobs:
       - name: Resolve CLI source
         id: cli
         env:
-          CROSS_REPO: ${{ contains(github.event.pull_request.labels.*.name, 'cross-repo')
+          CROSS_REPO:
+            ${{ contains(github.event.pull_request.labels.*.name, 'cross-repo')
             }}
         run: |
           REF="${{ github.head_ref }}"

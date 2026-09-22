@@ -1,1 +1,1 @@
-import "@theahaco/ts-config/reset.d.ts"
+import "@theahaco/ts-config/reset.d.ts";

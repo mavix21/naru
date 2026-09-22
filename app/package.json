@@ -1,49 +1,49 @@
 {
-	"name": "@stellar-scaffold/ui-react",
-	"version": "0.0.1",
-	"private": true,
-	"type": "module",
-	"scripts": {
-		"dev": "next dev",
-		"start": "next start",
-		"watch": "concurrently --kill-others-on-fail --names stellar,next -c gray,green --pad-prefix \"stellar scaffold watch --build-clients\" \"next dev\"",
-		"build": "next build",
-		"preview": "next start",
-		"lint": "oxlint --react-plugin --nextjs-plugin --jsx-a11y-plugin src next.config.ts",
-		"format": "oxfmt .",
-		"prepare": "husky",
-		"typecheck": "tsc --noEmit"
-	},
-	"dependencies": {
-		"@stellar-scaffold/app-lib": "workspace:*",
-		"@tanstack/react-query": "^5.90.17",
-		"@theahaco/contract-explorer": "^1.3.0",
-		"@theahaco/ts-config": "^1.3.0",
-		"lossless-json": "^4.3.0",
-		"next": "^16.3.6",
-		"react": "^19.2.6",
-		"react-dom": "^19.2.6"
-	},
-	"devDependencies": {
-		"@types/lodash": "^4.17.24",
-		"@types/node": "^24.0.0",
-		"@types/react": "^19.2.15",
-		"@types/react-dom": "^19.2.3",
-		"concurrently": "^10.0.3",
-		"dotenv": "^17.4.2",
-		"glob": "^13.0.6",
-		"globals": "^17.6.0",
-		"husky": "^9.1.7",
-		"lint-staged": "^16.4.0",
-		"oxfmt": "^0.70.0",
-		"oxlint": "^1.85.0",
-		"typescript": "^6.0.2"
-	},
-	"lint-staged": {
-		"*.{js,jsx,ts,tsx,mjs,cjs}": "oxlint --react-plugin --nextjs-plugin --jsx-a11y-plugin --fix",
-		"**/*": "oxfmt"
-	},
-	"engines": {
-		"stellar-scaffold": ">=0.0.24"
-	}
+  "name": "@stellar-scaffold/ui-react",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "start": "next start",
+    "watch": "concurrently --kill-others-on-fail --names stellar,next -c gray,green --pad-prefix \"stellar scaffold watch --build-clients\" \"next dev\"",
+    "build": "next build",
+    "preview": "next start",
+    "lint": "oxlint --react-plugin --nextjs-plugin --jsx-a11y-plugin src next.config.ts",
+    "format": "oxfmt .",
+    "prepare": "husky",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@stellar-scaffold/app-lib": "workspace:*",
+    "@tanstack/react-query": "^5.90.17",
+    "@theahaco/contract-explorer": "^1.3.0",
+    "@theahaco/ts-config": "^1.3.0",
+    "lossless-json": "^4.3.0",
+    "next": "^16.3.6",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6"
+  },
+  "devDependencies": {
+    "@types/lodash": "^4.17.24",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.2.15",
+    "@types/react-dom": "^19.2.3",
+    "concurrently": "^10.0.3",
+    "dotenv": "^17.4.2",
+    "glob": "^13.0.6",
+    "globals": "^17.6.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.4.0",
+    "oxfmt": "^0.70.0",
+    "oxlint": "^1.85.0",
+    "typescript": "^6.0.2"
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx,mjs,cjs}": "oxlint --react-plugin --nextjs-plugin --jsx-a11y-plugin --fix",
+    "**/*": "oxfmt"
+  },
+  "engines": {
+    "stellar-scaffold": ">=0.0.24"
+  }
 }

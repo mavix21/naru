@@ -1,5 +1,5 @@
 {
-	"printWidth": 80,
+  "printWidth": 80,
   "sortImports": {
     "groups": [
       "type-import",
