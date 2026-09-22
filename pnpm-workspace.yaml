@@ -1,0 +1,5 @@
+packages:
+  - "app"
+  - "app-lib"
+  - "app-lib/clients/*"
+  - "e2e"
