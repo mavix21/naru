@@ -3,3 +3,9 @@ packages:
   - "app-lib"
   - "app-lib/clients/*"
   - "e2e"
+allowBuilds:
+  '@reown/appkit': false
+  bufferutil: true
+  secp256k1: true
+  unrs-resolver: true
+  utf-8-validate: true
