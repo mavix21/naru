@@ -12,6 +12,8 @@ import { networkPassphrase, stellarNetwork } from "./env";
 // any networks beside Testnet and Mainnet. Filter below based on dApp config.
 const CUSTOM_NETWORK_WALLETS = new Set(["freighter", "xbull", "hana"]);
 
+// SAFETY: The kit accepts arbitrary network passphrases at runtime, including
+// the custom local and futurenet passphrases configured by this app.
 StellarWalletsKit.init({
   network: networkPassphrase as Networks,
   modules:
@@ -49,6 +51,7 @@ export const getWalletNetwork = async (): Promise<{
 }> => {
   try {
     const { networkPassphrase } = await StellarWalletsKit.getNetwork();
+
     return { supported: true, networkPassphrase };
   } catch {
     return { supported: false };
@@ -74,18 +77,23 @@ const onWalletNetworkChange = (
 
   const poll = async () => {
     const { networkPassphrase } = await getWalletNetwork();
+
     if (stopped) return;
+
     if (first || networkPassphrase !== last) {
       first = false;
       last = networkPassphrase;
       cb(networkPassphrase);
     }
+
     timeoutId = setTimeout(() => void poll(), pollInterval);
   };
+
   void poll();
 
   return () => {
     stopped = true;
+
     if (timeoutId != null) clearTimeout(timeoutId);
   };
 };
@@ -117,6 +125,7 @@ export const onWalletChange = (
       // the wallet's connected network. Disregard it and start our own polling
       // logic below if we have an address.
       const { address } = event.payload;
+
       if (address) {
         stopPoll = onWalletNetworkChange((networkPassphrase) =>
           cb({ address, networkPassphrase }),
@@ -166,17 +175,22 @@ export type MappedBalances = Record<string, Horizon.HorizonApi.BalanceLine>;
 export const fetchBalances = async (address: string) => {
   try {
     const { balances } = await horizon.accounts().accountId(address).call();
-    const mapped = balances.reduce((acc, b) => {
+
+    const mapped = balances.reduce<MappedBalances>((acc, b) => {
       b.balance = formatter.format(Number(b.balance));
+
       const key =
         b.asset_type === "native"
           ? "xlm"
           : b.asset_type === "liquidity_pool_shares"
             ? b.liquidity_pool_id
             : `${b.asset_code}:${b.asset_issuer}`;
+
       acc[key] = b;
+
       return acc;
-    }, {} as MappedBalances);
+    }, {});
+
     return mapped;
   } catch (err) {
     // `not found` is sort of expected, indicating an unfunded wallet, which
@@ -186,6 +200,7 @@ export const fetchBalances = async (address: string) => {
     if (!(err instanceof Error && err.message.match(/not found/i))) {
       console.error(err);
     }
+
     return {};
   }
 };

@@ -19,6 +19,13 @@ const passphraseToName: Record<string, string> = Object.fromEntries(
 
 export type NetworkState = "disconnected" | "mismatch" | "ok" | "unverified";
 
+export interface NetworkStatus {
+  appNetwork: string;
+  walletNetwork: string;
+  state: NetworkState;
+  title: string;
+}
+
 /**
  * Compare the app's configured network against the connected wallet's network
  * using passphrase. Most wallets don't report their network (Wallets Kit issue
@@ -28,13 +35,9 @@ export type NetworkState = "disconnected" | "mismatch" | "ok" | "unverified";
 export function networkStatus(
   address: string | null | undefined,
   walletPassphrase: string | null | undefined,
-): {
-  appNetwork: string;
-  walletNetwork: string;
-  state: NetworkState;
-  title: string;
-} {
+): NetworkStatus {
   const appNetwork = formatNetworkName(stellarNetwork);
+
   // Label, in priority order: blank when there's no passphrase (disconnected);
   // the app's own label when the wallet matches the configured passphrase (so a
   // custom/standalone passphrase still reads as e.g. "Local" rather than
@@ -55,6 +58,7 @@ export function networkStatus(
       title: "Connect your wallet using this network.",
     };
   }
+
   if (!walletPassphrase) {
     return {
       appNetwork,
@@ -63,6 +67,7 @@ export function networkStatus(
       title: `This wallet doesn't report its network — make sure it is set to ${appNetwork}.`,
     };
   }
+
   if (walletPassphrase !== networkPassphrase) {
     return {
       appNetwork,
@@ -71,5 +76,6 @@ export function networkStatus(
       title: `Wallet is on ${walletNetwork}, connect to ${appNetwork} instead.`,
     };
   }
+
   return { appNetwork, walletNetwork, state: "ok", title: "" };
 }

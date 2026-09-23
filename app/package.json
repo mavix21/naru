@@ -9,7 +9,7 @@
     "watch": "concurrently --kill-others-on-fail --names stellar,next -c gray,green --pad-prefix \"stellar scaffold watch --build-clients\" \"next dev\"",
     "build": "next build",
     "preview": "next start",
-    "lint": "oxlint --react-plugin --nextjs-plugin --jsx-a11y-plugin src next.config.ts",
+    "lint": "oxlint --react-plugin --nextjs-plugin --jsx-a11y-plugin --deny-warnings src next.config.ts postcss.config.mjs",
     "format": "oxfmt .",
     "prepare": "husky",
     "typecheck": "tsc --noEmit"

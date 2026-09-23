@@ -20,6 +20,8 @@ const Toaster = ({ ...props }: ToasterProps) => {
         error: <IconAlertOctagon className="size-4" />,
         loading: <IconLoader className="size-4 animate-spin" />,
       }}
+      // SAFETY: CSS custom properties are valid inline styles even though
+      // React.CSSProperties only declares standard properties.
       style={
         {
           "--normal-bg": "var(--popover)",

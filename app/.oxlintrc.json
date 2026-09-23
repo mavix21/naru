@@ -1,4 +1,5 @@
 {
+  "extends": ["../.oxlintrc.json"],
   "jsPlugins": ["@shadcn/lint"],
   "rules": {
     "shadcn/no-raw-colors": "error",

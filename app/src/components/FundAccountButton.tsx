@@ -17,6 +17,7 @@ const FundAccountButton: React.FC = () => {
   const handleFundAccount = () => {
     startTransition(async () => {
       const { ok, message } = await fundAccount(address);
+
       if (ok) await updateBalances();
       addNotification(message, ok ? "success" : "error");
     });

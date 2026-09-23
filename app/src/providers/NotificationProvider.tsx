@@ -34,4 +34,5 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 }
 
 export { NotificationContext };
+
 export type { NotificationContextType };

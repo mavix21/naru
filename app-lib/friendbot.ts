@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 import { stellarNetwork } from "./env";
 
 // Utility to get the correct Friendbot URL based on environment
@@ -26,18 +28,22 @@ export async function fundAccount(
 ): Promise<{ ok: boolean; message: string }> {
   try {
     const response = await fetch(getFriendbotUrl(address));
+
     if (response.ok) {
       return { ok: true, message: "Account funded successfully!" };
     }
-    const body: unknown = await response.json();
-    if (
-      body !== null &&
-      typeof body === "object" &&
-      "detail" in body &&
-      typeof body.detail === "string"
-    ) {
-      return { ok: false, message: `Error funding account: ${body.detail}` };
+
+    const body = z
+      .object({ detail: z.string() })
+      .safeParse(await response.json());
+
+    if (body.success) {
+      return {
+        ok: false,
+        message: `Error funding account: ${body.data.detail}`,
+      };
     }
+
     return { ok: false, message: "Error funding account: Unknown error" };
   } catch {
     return { ok: false, message: "Error funding account. Please try again." };

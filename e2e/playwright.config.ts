@@ -15,16 +15,20 @@ type Target = { name: string; cwd: string; port: number };
 
 function resolveTargets(): Target[] {
   const appDir = resolve(repoRoot, "app");
+
   if (existsSync(appDir)) {
     return [{ name: "app", cwd: appDir, port: 5180 }];
   }
+
   const templatesDir = resolve(repoRoot, "templates");
+
   const frameworks = existsSync(templatesDir)
     ? readdirSync(templatesDir, { withFileTypes: true })
         .filter((d) => d.isDirectory())
         .map((d) => d.name)
         .sort()
     : [];
+
   return frameworks.map((name, i) => ({
     name,
     cwd: resolve(templatesDir, name),

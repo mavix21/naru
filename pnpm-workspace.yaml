@@ -20,4 +20,4 @@ minimumReleaseAgeExclude:
   - "@next/swc-win32-arm64-msvc@16.3.6"
   - "@next/swc-win32-x64-msvc@16.3.6"
   - next@16.3.6
-  - '@shadcn/lint@0.2.0'
+  - "@shadcn/lint@0.2.0"

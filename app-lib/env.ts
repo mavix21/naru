@@ -45,6 +45,7 @@ export const stellarNetwork =
   env.PUBLIC_STELLAR_NETWORK === "STANDALONE"
     ? "LOCAL"
     : env.PUBLIC_STELLAR_NETWORK;
+
 export const networkPassphrase = env.PUBLIC_STELLAR_NETWORK_PASSPHRASE;
 
 const stellarEncode = (str: string) => {
@@ -68,6 +69,7 @@ export const labPrefix = () => {
 
 // NOTE: needs to be exported for contract files in this directory
 export const rpcUrl = env.PUBLIC_STELLAR_RPC_URL;
+
 export const horizonUrl = env.PUBLIC_STELLAR_HORIZON_URL;
 
 const networkToId = (network: string): NetworkType => {

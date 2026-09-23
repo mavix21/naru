@@ -22,13 +22,15 @@ function deepEqual<T>(a: T, b: T): boolean {
     return true;
   }
 
-  const bothAreObjects =
-    a && b && typeof a === "object" && typeof b === "object";
+  const bothAreObjects = a instanceof Object && b instanceof Object;
 
   return Boolean(
     bothAreObjects &&
     Object.keys(a).length === Object.keys(b).length &&
-    Object.entries(a).every(([k, v]) => deepEqual(v, b[k as keyof T])),
+    Object.entries(a).every(([k, v]) => {
+      // SAFETY: Both operands are objects and this key comes from a's own entries.
+      return Object.hasOwn(b, k) && deepEqual(v, b[k as keyof T]);
+    }),
   );
 }
 
@@ -45,6 +47,7 @@ const signTransaction: WalletContextType["signTransaction"] = async (
   ...args
 ) => {
   const wallet = await import("@stellar-scaffold/app-lib/wallet");
+
   return wallet.signTransaction(...args);
 };
 
@@ -68,6 +71,7 @@ export const WalletProvider = ({ children }: { children: React.ReactNode }) => {
     const newBalances = await fetchBalances(address);
     setBalances((prev) => {
       if (deepEqual(newBalances, prev)) return prev;
+
       return newBalances;
     });
   }, [address]);
@@ -91,10 +95,12 @@ export const WalletProvider = ({ children }: { children: React.ReactNode }) => {
           setAddress(state.address);
           setNetworkPassphrase(state.networkPassphrase);
           setIsPending(false);
+
           if (!state.address) setBalances({});
         });
       },
     );
+
     return () => {
       mounted = false;
       unsubscribe?.();

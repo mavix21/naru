@@ -30,6 +30,7 @@ export function subscribeToEvents(
   pollInterval = 5000,
 ): () => void {
   const id = `${contractId}:${topic}`;
+
   if (!paging[id]) paging[id] = {};
   const page = paging[id];
 
@@ -73,9 +74,11 @@ export function subscribeToEvents(
       );
 
       page.pagingToken = undefined;
+
       if (response.latestLedger) {
         page.lastLedgerStart = response.latestLedger;
       }
+
       if (response.events && response.events.length > 0) {
         response.events.forEach((event) => {
           try {
@@ -87,6 +90,7 @@ export function subscribeToEvents(
             );
           }
         });
+
         if (response.cursor) {
           page.pagingToken = response.cursor;
         }
@@ -104,6 +108,7 @@ export function subscribeToEvents(
 
   return () => {
     stopped = true;
+
     if (timeoutId != null) clearTimeout(timeoutId);
   };
 }

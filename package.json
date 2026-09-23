@@ -12,12 +12,14 @@
     "dev": "npm start",
     "prestart": "node scripts/dev-guard.mjs",
     "start": "pnpm --dir app watch",
-    "lint": "npm run lint --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present && oxlint app-lib e2e scripts --deny-warnings",
     "format": "oxfmt . --ignore-path=.oxfmtignore",
     "format:check": "oxfmt . --check --ignore-path=.oxfmtignore"
   },
   "devDependencies": {
-    "oxfmt": "^0.70.0"
+    "@oxlint/plugins": "1.85.0",
+    "oxfmt": "^0.70.0",
+    "oxlint": "1.85.0"
   },
   "packageManager": "pnpm@11.25.0"
 }

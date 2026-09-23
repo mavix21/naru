@@ -32,6 +32,7 @@ const TOOLS = [
 function has(cmd) {
   try {
     execSync(cmd, { stdio: "ignore" });
+
     return true;
   } catch {
     return false;
@@ -40,8 +41,10 @@ function has(cmd) {
 
 function toolInstructions() {
   const missing = TOOLS.filter((t) => !has(t.check));
+
   if (missing.length === 0) return "";
   const hasBinstall = has("cargo binstall --version");
+
   return [
     "",
     "Missing required tools:",
@@ -56,6 +59,7 @@ function toolInstructions() {
 // Lifecycle gate.
 if (existsSync(resolve(root, "app"))) {
   const tools = toolInstructions();
+
   if (!tools) process.exit(0);
   console.error(
     `\nCannot start — install the required Stellar tools first:${tools}\n`,
@@ -64,6 +68,7 @@ if (existsSync(resolve(root, "app"))) {
 }
 
 const templatesDir = resolve(root, "templates");
+
 const frameworks = existsSync(templatesDir)
   ? readdirSync(templatesDir, { withFileTypes: true })
       .filter((d) => d.isDirectory())
@@ -90,4 +95,5 @@ console.error(
     "",
   ].join("\n"),
 );
+
 process.exit(1);

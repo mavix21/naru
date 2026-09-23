@@ -8,9 +8,15 @@ importers:
 
   .:
     devDependencies:
+      '@oxlint/plugins':
+        specifier: 1.85.0
+        version: 1.85.0
       oxfmt:
         specifier: ^0.70.0
         version: 0.70.0
+      oxlint:
+        specifier: 1.85.0
+        version: 1.85.0
 
   app:
     dependencies:
@@ -1250,6 +1256,10 @@ packages:
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [x64]
     os: [win32]
+
+  '@oxlint/plugins@1.85.0':
+    resolution: {integrity: sha512-qqHqML3ME3cxGgFvWJG8wwMnJc9ol5SMdtqkq0k8r7l0USmC+HRXYjzDacME4Dqkx4yqrUsBhj0JYvji8fHxJQ==}
+    engines: {node: ^12.22.0 || ^14.17.0 || >=16.0.0}
 
   '@phosphor-icons/webcomponents@2.1.5':
     resolution: {integrity: sha512-JcvQkZxvcX2jK+QCclm8+e8HXqtdFW9xV4/kk2aL9Y3dJA2oQVt+pzbv1orkumz3rfx4K9mn9fDoMr1He1yr7Q==}
@@ -6104,6 +6114,8 @@ snapshots:
 
   '@oxlint/binding-win32-x64-msvc@1.85.0':
     optional: true
+
+  '@oxlint/plugins@1.85.0': {}
 
   '@phosphor-icons/webcomponents@2.1.5':
     dependencies:

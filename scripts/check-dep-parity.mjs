@@ -24,6 +24,7 @@ const MUST_MATCH = [
 ];
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+
 const templatesDir = join(repoRoot, "templates");
 
 if (!existsSync(templatesDir)) {
@@ -39,6 +40,7 @@ const templates = readdirSync(templatesDir, { withFileTypes: true })
     const pkg = JSON.parse(
       readFileSync(join(templatesDir, d.name, "package.json"), "utf8"),
     );
+
     return {
       name: d.name,
       deps: { ...pkg.dependencies, ...pkg.devDependencies },
@@ -48,14 +50,18 @@ const templates = readdirSync(templatesDir, { withFileTypes: true })
 // "^8.0.7" -> {major:8,minor:0,patch:7,base:"8.0.7"}; returns null if uncomparable ("*", "workspace:*")
 const parse = (range) => {
   const m = String(range).match(/(\d+)\.(\d+)\.(\d+)/);
+
   if (!m) return null;
   const [, major, minor, patch] = m.map(Number);
+
   return { major, minor, patch, base: `${major}.${minor}.${patch}` };
 };
+
 // the unit that signals a breaking change: major for >=1.0, else the 0.x minor
 const breakingKey = (v) => (v.major > 0 ? `${v.major}` : `0.${v.minor}`);
 
 let failed = false;
+
 const lines = [];
 
 for (const dep of MUST_MATCH) {
@@ -94,6 +100,7 @@ for (const dep of MUST_MATCH) {
 console.log(
   `Template dependency parity (${templates.map((t) => t.name).join(", ")}):\n`,
 );
+
 console.log(lines.join("\n"));
 
 if (failed) {
@@ -103,4 +110,5 @@ if (failed) {
   );
   process.exit(1);
 }
+
 console.log("\nNo blocking drift. ✅");

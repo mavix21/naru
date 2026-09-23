@@ -8,6 +8,7 @@ import { Badge } from "./ui/badge";
 
 const NetworkPill: React.FC = () => {
   const { networkPassphrase, address } = useWallet();
+
   const { appNetwork, state, title } = networkStatus(
     address,
     networkPassphrase,
