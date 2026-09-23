@@ -1,0 +1,66 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "openai/gpt-6-sol",
+  "agent": {
+    "build": {
+      "permission": {
+        "question": "allow"
+      }
+    }
+  },
+  "provider": {
+    "openai": {
+      "models": {
+        "gpt-6-astra": {
+          "options": {
+            "textVerbosity": "low",
+            "reasoningSummary": "concise"
+          }
+        },
+        "gpt-6-sol": {
+          "options": {
+            "textVerbosity": "low",
+            "reasoningSummary": "concise"
+          }
+        }
+      }
+    }
+  },
+  "mcp": {
+    "linear": {
+      "type": "remote",
+      "url": "https://mcp.linear.app/mcp",
+      "enabled": true
+    },
+    "mobbin": {
+      "type": "remote",
+      "url": "https://api.mobbin.com/mcp",
+      "enabled": true
+    }
+  },
+  "permission": {
+    "skill": {
+      "*": "deny",
+      "customize-opencode": "allow",
+      "server-first-nextjs": "allow",
+      "shadcn": "allow",
+      "better-auth-best-practices": "allow",
+      "convex-best-practices": "allow",
+      "convex-functions": "allow",
+      "convex-security-check": "allow",
+      "heroui-native": "allow",
+      "vercel-react-native-skills": "allow",
+      "turborepo": "allow",
+      "frontend-design": "allow",
+      "animation-accessibility": "allow",
+      "css-animations": "allow",
+      "motion-react": "allow",
+      "grilling": "allow",
+      "domain-modeling": "allow"
+    }
+  },
+  "tool_output": {
+    "max_lines": 400,
+    "max_bytes": 16384
+  }
+}

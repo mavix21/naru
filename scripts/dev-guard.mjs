@@ -3,7 +3,7 @@ import { existsSync, readdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-// Runs as the root `prestart` hook. Two jobs:
+// Runs as the root `predev` and `prestart` hooks. Two jobs:
 //   1. Lifecycle gate — post-`init` the instantiated `app/` exists, so pass
 //      through and let `start` run the app (works out of the box for users).
 //      In a raw clone of the monorepo there's no single app; point the newcomer
@@ -78,7 +78,7 @@ const frameworks = existsSync(templatesDir)
 
 const devLines =
   frameworks.length > 0
-    ? frameworks.map((f) => `  npm start --workspace templates/${f}`).join("\n")
+    ? frameworks.map((f) => `  pnpm --dir templates/${f} start`).join("\n")
     : "  (no templates found)";
 
 console.error(

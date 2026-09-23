@@ -9,10 +9,11 @@
     "e2e"
   ],
   "scripts": {
-    "dev": "npm start",
+    "predev": "node scripts/dev-guard.mjs",
+    "dev": "pnpm --filter @stellar-scaffold/ui-react watch",
     "prestart": "node scripts/dev-guard.mjs",
     "start": "pnpm --dir app watch",
-    "lint": "npm run lint --workspaces --if-present && oxlint app-lib e2e scripts --deny-warnings",
+    "lint": "pnpm -r --if-present run lint && oxlint app-lib e2e scripts --deny-warnings",
     "format": "oxfmt . --ignore-path=.oxfmtignore",
     "format:check": "oxfmt . --check --ignore-path=.oxfmtignore"
   },

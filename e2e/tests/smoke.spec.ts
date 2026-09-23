@@ -1,30 +1,52 @@
 import { test, expect } from "@playwright/test";
 
-// UI-smoke parity: framework-agnostic assertions that must hold for every
-// target (each framework template in the monorepo, or the single `app/` after
-// init). These guard the shared-util/component/style refactor against dropped
-// features and broken imports — no chain or wallet interaction required.
+test("the map responds to zoom and pan", async ({ page }) => {
+  const tileLoaded = page.waitForResponse(
+    (response) =>
+      response.url().startsWith("https://tiles.openfreemap.org/planet/") &&
+      response.url().endsWith(".pbf") &&
+      response.ok(),
+  );
 
-test("home page mounts", async ({ page }) => {
-  const response = await page.goto("/");
-  expect(response?.ok()).toBeTruthy();
-  await expect(page.locator("body")).toBeVisible();
+  await page.goto("/");
+  await tileLoaded;
+
+  const map = page.getByRole("region", {
+    name: "Mapa interactivo de Lima, Perú",
+  });
+
+  const canvas = map.locator("canvas");
+
+  await expect(map.getByText("OpenStreetMap")).toBeVisible();
+
+  const initialView = await canvas.screenshot();
+
+  await map.getByRole("button", { name: "Zoom in" }).click();
+  await expect
+    .poll(async () => (await canvas.screenshot()).equals(initialView))
+    .toBe(false);
+
+  const zoomedView = await canvas.screenshot();
+  const bounds = await canvas.boundingBox();
+
+  if (!bounds) throw new Error("Map canvas is not visible");
+
+  const x = bounds.x + bounds.width / 2;
+  const y = bounds.y + bounds.height / 2;
+
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x + 80, y + 60, { steps: 8 });
+  await page.mouse.up();
+
+  await expect
+    .poll(async () => (await canvas.screenshot()).equals(zoomedView))
+    .toBe(false);
 });
 
-test("wallet connect button is present", async ({ page }) => {
-  await page.goto("/");
-  await expect(page.getByRole("button", { name: /connect/i })).toBeVisible();
-});
-
-test("contract explorer link is present", async ({ page }) => {
-  await page.goto("/");
-  await expect(page.locator('a[href="/debug"]').first()).toBeVisible();
-});
-
-test("guess-the-number sample contract form is present", async ({ page }) => {
-  await page.goto("/");
+test("the Stellar debug route remains available", async ({ page }) => {
+  await page.goto("/debug");
   await expect(
-    page.getByPlaceholder("Guess a number from 1 to 10!"),
+    page.getByText("Contract Explorer", { exact: true }),
   ).toBeVisible();
-  await expect(page.getByRole("button", { name: "Submit" })).toBeVisible();
 });

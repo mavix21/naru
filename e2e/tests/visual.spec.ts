@@ -1,19 +1,20 @@
 import { test, expect } from "@playwright/test";
 
-// Visual guard for the styles centralization. Per-project baselines (one per
-// framework) are committed; the smoke specs assert behavior, these assert
-// appearance. During the styles refactor an intended change shows up as a diff
-// to review + re-baseline (`--update-snapshots`); an unintended one fails.
+for (const viewport of [
+  { width: 1440, height: 900 },
+  { width: 390, height: 844 },
+]) {
+  test(`the map fills the ${viewport.width}px viewport`, async ({ page }) => {
+    await page.setViewportSize(viewport);
+    await page.goto("/");
 
-test("home page visual", async ({ page }) => {
-  await page.goto("/");
-  // ensure the app has mounted before snapshotting
-  await expect(page.getByRole("button", { name: /connect/i })).toBeVisible();
-  await expect(
-    page.getByPlaceholder("Guess a number from 1 to 10!"),
-  ).toBeVisible();
-  await expect(page).toHaveScreenshot("home.png", {
-    fullPage: true,
-    animations: "disabled",
+    const map = page.getByRole("region", {
+      name: "Mapa interactivo de Lima, Perú",
+    });
+
+    await expect(map).toHaveCSS("width", `${viewport.width}px`);
+    await expect(map).toHaveCSS("height", `${viewport.height}px`);
+    await expect(page.getByRole("heading", { name: "Pulso" })).toBeVisible();
+    await expect(map.getByRole("button", { name: "Zoom in" })).toBeInViewport();
   });
-});
+}

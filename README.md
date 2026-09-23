@@ -27,8 +27,7 @@ and that the following tools are installed :
 - Rust target: install the compilation target listed in the
   [Soroban setup guide](https://developers.stellar.org/docs/build/smart-contracts/getting-started/setup)
 - [Node.js](https://nodejs.org/en/download/package-manager) (v22, or higher)
-- [npm](https://www.npmjs.com/): Comes with the node installer or can also be
-  installed package managers such as Homebrew, Chocolatey, apt, etc.
+- [pnpm](https://pnpm.io/installation)
 - [Stellar CLI](https://github.com/stellar/stellar-core)
 - [Stellar Scaffold CLI Plugin](https://github.com/stellar-scaffold/cli)
 
@@ -50,7 +49,7 @@ cd my-project
 cp .env.example .env
 
 # Install frontend dependencies
-npm install
+pnpm install
 ```
 
 Have a look at `environments.toml` for more fined-grained control.
@@ -58,10 +57,10 @@ Have a look at `environments.toml` for more fined-grained control.
 3. Start development environment:
 
 ```bash
-npm run dev
+pnpm dev
 ```
 
-Open the server URL in your web browser.
+Open http://localhost:3000 in your web browser.
 
 4. For testnet/mainnet deployment:
 
