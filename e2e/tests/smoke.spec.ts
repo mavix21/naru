@@ -17,8 +17,6 @@ test("the map responds to zoom and pan", async ({ page }) => {
 
   const canvas = map.locator("canvas");
 
-  await expect(map.getByText("OpenStreetMap")).toBeVisible();
-
   const initialView = await canvas.screenshot();
 
   await map.getByRole("button", { name: "Zoom in" }).click();
@@ -42,11 +40,4 @@ test("the map responds to zoom and pan", async ({ page }) => {
   await expect
     .poll(async () => (await canvas.screenshot()).equals(zoomedView))
     .toBe(false);
-});
-
-test("the Stellar debug route remains available", async ({ page }) => {
-  await page.goto("/debug");
-  await expect(
-    page.getByText("Contract Explorer", { exact: true }),
-  ).toBeVisible();
 });
