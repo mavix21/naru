@@ -16,5 +16,13 @@ for (const viewport of [
     await expect(map).toHaveCSS("height", `${viewport.height}px`);
     await expect(page.getByRole("heading", { name: "Pulso" })).toBeVisible();
     await expect(map.getByRole("button", { name: "Zoom in" })).toBeInViewport();
+
+    const corridors = page.getByRole("complementary", { name: "Corredores" });
+
+    await expect(corridors).toBeInViewport();
+    await expect(corridors.getByRole("listitem")).toHaveCount(3);
+    await expect(corridors).toContainText("Javier Prado");
+    await expect(corridors).toContainText("Avenida Arequipa");
+    await expect(corridors).toContainText("Vía Expresa");
   });
 }
