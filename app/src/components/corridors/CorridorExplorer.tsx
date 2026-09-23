@@ -15,6 +15,7 @@ import {
 import { corridors } from "@/domain/corridors";
 
 import LimaMap from "../map/LimaMap";
+import JavierPradoTraffic from "./JavierPradoTraffic";
 
 export default function CorridorExplorer() {
   const [selectedCorridorId, setSelectedCorridorId] = useState(corridors[0].id);
@@ -90,16 +91,23 @@ export default function CorridorExplorer() {
               <IconX />
             </DrawerClose>
           </DrawerHeader>
-          <dl className="grid gap-5 px-4 py-6">
-            <div>
-              <dt className="text-xs text-muted-foreground">Origen</dt>
-              <dd className="mt-1 font-medium">{selectedRoute.origin}</dd>
-            </div>
-            <div>
-              <dt className="text-xs text-muted-foreground">Destino</dt>
-              <dd className="mt-1 font-medium">{selectedRoute.destination}</dd>
-            </div>
-          </dl>
+          <div className="min-h-0 overflow-y-auto px-4">
+            <dl className="grid gap-5 py-6">
+              <div>
+                <dt className="text-xs text-muted-foreground">Origen</dt>
+                <dd className="mt-1 font-medium">{selectedRoute.origin}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted-foreground">Destino</dt>
+                <dd className="mt-1 font-medium">
+                  {selectedRoute.destination}
+                </dd>
+              </div>
+            </dl>
+            {detailsOpen && selectedCorridor.id === "javier-prado" && (
+              <JavierPradoTraffic />
+            )}
+          </div>
         </DrawerContent>
       </Drawer>
     </section>
