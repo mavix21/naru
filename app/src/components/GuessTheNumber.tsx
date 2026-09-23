@@ -3,6 +3,10 @@
 import { useState } from "react";
 
 import { useWallet } from "../hooks/useWallet";
+import { Alert, AlertDescription } from "./ui/alert";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import { Label } from "./ui/label";
 
 export const GuessTheNumber = () => {
   const { address, updateBalances, signTransaction } = useWallet();
@@ -70,38 +74,43 @@ export const GuessTheNumber = () => {
   const reset = () => setResult("idle");
 
   return (
-    <div className="guess-the-number">
-      <form action={submitGuess}>
-        <input
-          placeholder="Guess a number from 1 to 10!"
-          id="guess"
-          name="guess"
-          type="number"
-          min="1"
-          max="10"
-          onChange={reset}
-        />
-        <button type="submit" disabled={result === "loading"}>
+    <div className="space-y-4">
+      <form action={submitGuess} className="flex flex-wrap items-end gap-3">
+        <div className="min-w-40 flex-1 space-y-2">
+          <Label htmlFor="guess">Your guess</Label>
+          <Input
+            placeholder="Guess a number from 1 to 10!"
+            id="guess"
+            name="guess"
+            type="number"
+            min="1"
+            max="10"
+            onChange={reset}
+          />
+        </div>
+        <Button type="submit" disabled={result === "loading"}>
           Submit
-        </button>
+        </Button>
       </form>
 
       {result === "success" && (
-        <div className="card guess-result guess-result--success">
-          <p>
+        <Alert>
+          <AlertDescription>
             You got it! Play again by calling <code>reset</code> in the Contract
             Explorer.
-          </p>
-        </div>
+          </AlertDescription>
+        </Alert>
       )}
       {result === "failure" && (
-        <div className="card guess-result guess-result--failure">
-          {!address ? (
-            <p>Connect to your wallet in order to guess.</p>
-          ) : (
-            <p>Incorrect guess. Try again!</p>
-          )}
-        </div>
+        <Alert variant="destructive">
+          <AlertDescription>
+            {!address ? (
+              <p>Connect to your wallet in order to guess.</p>
+            ) : (
+              <p>Incorrect guess. Try again!</p>
+            )}
+          </AlertDescription>
+        </Alert>
       )}
     </div>
   );

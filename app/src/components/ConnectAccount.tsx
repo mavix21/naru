@@ -6,7 +6,7 @@ import { WalletButton } from "./WalletButton";
 
 const ConnectAccount = () => {
   return (
-    <div className="connect-account">
+    <div className="flex flex-wrap items-center gap-2">
       <NetworkPill />
       {stellarNetwork !== "PUBLIC" && <FundAccountButton />}
       <WalletButton />

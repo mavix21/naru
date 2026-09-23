@@ -5,6 +5,7 @@ import React, { useTransition } from "react";
 
 import { useNotification } from "../hooks/useNotification";
 import { useWallet } from "../hooks/useWallet";
+import { Button } from "./ui/button";
 
 const FundAccountButton: React.FC = () => {
   const { addNotification } = useNotification();
@@ -22,13 +23,14 @@ const FundAccountButton: React.FC = () => {
   };
 
   return (
-    <button
+    <Button
+      variant="outline"
       disabled={isPending}
       onClick={handleFundAccount}
       title="Fund your account with test XLM via Friendbot"
     >
       Fund Account
-    </button>
+    </Button>
   );
 };
 

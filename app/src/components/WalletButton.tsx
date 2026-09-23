@@ -3,13 +3,14 @@
 import { shortAddress } from "@stellar-scaffold/app-lib/format";
 
 import { useWallet } from "../hooks/useWallet";
+import { Button } from "./ui/button";
 
 export const WalletButton = () => {
   const { address, isPending, balances } = useWallet();
 
   if (!address) {
     return (
-      <button
+      <Button
         onClick={() =>
           void import("@stellar-scaffold/app-lib/wallet").then(
             ({ connectWallet }) => connectWallet(),
@@ -18,18 +19,19 @@ export const WalletButton = () => {
         disabled={isPending}
       >
         {isPending ? "Loading..." : "Connect"}
-      </button>
+      </Button>
     );
   }
 
   return (
-    <div className="wallet-connected" style={{ opacity: isPending ? 0.6 : 1 }}>
-      <span className="wallet-balance">
+    <div className="flex items-center gap-2">
+      <span className="text-sm text-muted-foreground">
         {balances?.xlm?.balance ?? "-"} XLM
       </span>
 
-      <button
-        className="wallet-profile"
+      <Button
+        variant="outline"
+        disabled={isPending}
         onClick={() =>
           void import("@stellar-scaffold/app-lib/wallet").then(
             ({ profileModal }) => profileModal(),
@@ -37,7 +39,7 @@ export const WalletButton = () => {
         }
       >
         {shortAddress(address)}
-      </button>
+      </Button>
     </div>
   );
 };

@@ -1,0 +1,13 @@
+{
+  "jsPlugins": ["@shadcn/lint"],
+  "rules": {
+    "shadcn/no-raw-colors": "error",
+    "shadcn/no-restyle": ["error", { "allow": ["layout"] }]
+  },
+  "overrides": [
+    {
+      "files": ["src/components/ui/**"],
+      "rules": { "shadcn/no-restyle": "off" }
+    }
+  ]
+}

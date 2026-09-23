@@ -4,6 +4,7 @@ import { networkStatus } from "@stellar-scaffold/app-lib/format";
 import React from "react";
 
 import { useWallet } from "../hooks/useWallet";
+import { Badge } from "./ui/badge";
 
 const NetworkPill: React.FC = () => {
   const { networkPassphrase, address } = useWallet();
@@ -13,13 +14,13 @@ const NetworkPill: React.FC = () => {
   );
 
   return (
-    <div
-      className={`network-pill${state === "mismatch" || state === "unverified" ? ` network-pill--${state}` : ""}`}
+    <Badge
+      variant={state === "mismatch" ? "destructive" : "secondary"}
       title={title}
     >
-      <span className={`network-dot network-dot--${state}`} />
       {appNetwork}
-    </div>
+      {state === "mismatch" || state === "unverified" ? ` (${state})` : ""}
+    </Badge>
   );
 };
 
