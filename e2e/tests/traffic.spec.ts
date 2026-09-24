@@ -4,7 +4,7 @@ import { corridors } from "../../app/src/domain/corridors";
 import { trafficFixture } from "../fixtures/traffic";
 
 for (const [index, corridor] of corridors.entries()) {
-  test(`${corridor.name}: loading resolves to its traffic and refresh changes ETA and timestamp`, async ({
+  test(`${corridor.name}: loading resolves to ETA and updates automatically`, async ({
     page,
   }) => {
     let requests = 0;
@@ -20,6 +20,7 @@ for (const [index, corridor] of corridors.entries()) {
       await gate;
       await route.fulfill({ json: await trafficFixture(corridor, travelTime) });
     });
+    await page.clock.install();
     await page.goto("/");
     await page
       .getByRole("button", { name: corridor.name, exact: true })
@@ -33,27 +34,21 @@ for (const [index, corridor] of corridors.entries()) {
       "Consultando tráfico",
     );
     release();
-    await expect(traffic.getByRole("definition")).toHaveText(
+    await expect(traffic.getByRole("definition").first()).toHaveText(
       `${42 + index * 10} min`,
     );
-    await expect(traffic).toContainText(
-      `+${14 + index * 10} min más que en flujo libre`,
-    );
-    await expect(traffic).toContainText("28 min sin congestión");
-    await expect(traffic).toContainText("7.1 km");
-
-    const timestamp = await traffic.locator("time").getAttribute("datetime");
+    await expect(traffic).toContainText(`+${14 + index * 10} min por tráfico`);
+    await expect(traffic).toContainText("Sin tráfico: 28 min");
+    await expect(traffic).toContainText("7.1 km · En auto");
+    await expect(traffic.locator("time")).toHaveText("Actualizado ahora");
+    await expect(traffic.locator("button")).toHaveCount(0);
 
     travelTime += 180;
-    await traffic
-      .getByRole("button", { name: "Actualizar", exact: true })
-      .click();
-    await expect(traffic.getByRole("definition")).toHaveText(
+    await page.clock.fastForward(61_000);
+    await expect(traffic.locator("time")).toHaveText("Actualizado hace 1 min");
+    await page.clock.fastForward(60_000);
+    await expect(traffic.getByRole("definition").first()).toHaveText(
       `${45 + index * 10} min`,
-    );
-    await expect(traffic.locator("time")).not.toHaveAttribute(
-      "datetime",
-      timestamp ?? "",
     );
     expect(requests).toBe(2);
   });
@@ -82,16 +77,16 @@ for (const [index, corridor] of corridors.entries()) {
     });
 
     await select.press("Enter");
-    await expect(traffic.getByRole("definition")).toHaveText("42 min");
+    await expect(traffic.getByRole("definition").first()).toHaveText("42 min");
     await select.press("Enter");
     await page.getByRole("button", { name: "Cerrar detalles" }).click();
     await select.press("Enter");
-    await expect(traffic.getByRole("definition")).toHaveText("42 min");
+    await expect(traffic.getByRole("definition").first()).toHaveText("42 min");
     expect(requests).toBe(1);
 
     travelTime = 2700;
     await page.clock.fastForward(121_000);
-    await expect(traffic.getByRole("definition")).toHaveText("45 min");
+    await expect(traffic.getByRole("definition").first()).toHaveText("45 min");
     expect(requests).toBe(2);
 
     // Exercise the browser visibility event used by the query lifecycle.
@@ -112,21 +107,18 @@ for (const [index, corridor] of corridors.entries()) {
       document.dispatchEvent(new Event("visibilitychange"));
     });
     await expect.poll(() => requests).toBe(3);
-    await expect(
-      traffic.getByRole("button", { name: "Actualizar", exact: true }),
-    ).toBeEnabled();
 
     await page.getByRole("button", { name: "Cerrar detalles" }).click();
     await page.clock.fastForward(360_000);
     expect(requests).toBe(3);
     travelTime = 2880;
     await select.press("Enter");
-    await expect(traffic.getByRole("definition")).toHaveText("48 min");
+    await expect(traffic.getByRole("definition").first()).toHaveText("48 min");
     expect(requests).toBe(4);
   });
 
   for (const status of ["not-configured", "provider-error", "unavailable"]) {
-    test(`${corridor.name}: ${status} shows an intentional state and recovers on refresh`, async ({
+    test(`${corridor.name}: ${status} shows an error and recovers`, async ({
       page,
     }) => {
       let recover = false;
@@ -137,6 +129,7 @@ for (const [index, corridor] of corridors.entries()) {
           json: recover ? await trafficFixture(corridor) : { status },
         });
       });
+      await page.clock.install();
       await page.goto("/");
       await page
         .getByRole("button", { name: corridor.name, exact: true })
@@ -150,11 +143,21 @@ for (const [index, corridor] of corridors.entries()) {
       await expect(traffic.getByRole("definition")).toHaveCount(0);
       await expect(traffic.locator("time")).toHaveCount(0);
       recover = true;
-      await traffic
-        .getByRole("button", { name: "Actualizar", exact: true })
-        .click();
+
+      if (status === "not-configured") {
+        await page.getByRole("button", { name: "Cerrar detalles" }).click();
+        await page.clock.fastForward(121_000);
+        await page
+          .getByRole("button", { name: corridor.name, exact: true })
+          .press("Enter");
+      } else {
+        await page.clock.fastForward(121_000);
+      }
+
       await expect(traffic.getByRole("alert")).toHaveCount(0);
-      await expect(traffic.getByRole("definition")).toHaveText("42 min");
+      await expect(traffic.getByRole("definition").first()).toHaveText(
+        "42 min",
+      );
     });
   }
 }
@@ -197,7 +200,8 @@ test("rapid switching cancels obsolete requests and isolates each route's observ
   await expect(
     page
       .getByRole("region", { name: "Tráfico de Javier Prado" })
-      .getByRole("definition"),
+      .getByRole("definition")
+      .first(),
   ).toHaveText("42 min");
   await selector
     .getByRole("button", { name: "Avenida Arequipa", exact: true })
@@ -225,22 +229,23 @@ test("rapid switching cancels obsolete requests and isolates each route's observ
 
   const expresa = page.getByRole("region", { name: "Tráfico de Vía Expresa" });
 
-  await expect(expresa.getByRole("definition")).toHaveText("10 min");
+  await expect(expresa.getByRole("definition").first()).toHaveText("10 min");
   release();
-  await expect(expresa.getByRole("definition")).toHaveText("10 min");
+  await expect(expresa.getByRole("definition").first()).toHaveText("10 min");
   await selector
     .getByRole("button", { name: "Javier Prado", exact: true })
     .click();
   await expect(
     page
       .getByRole("region", { name: "Tráfico de Javier Prado" })
-      .getByRole("definition"),
+      .getByRole("definition")
+      .first(),
   ).toHaveText("42 min");
   expect(requests.get("javier-prado")).toBe(1);
   await selector
     .getByRole("button", { name: "Avenida Arequipa", exact: true })
     .click();
-  await expect(arequipa.getByRole("definition")).toHaveText("42 min");
+  await expect(arequipa.getByRole("definition").first()).toHaveText("42 min");
   expect(requests.get("avenida-arequipa")).toBe(2);
   expect(requests.get("via-expresa")).toBe(1);
 });
@@ -307,16 +312,15 @@ test("a failed refresh removes the old current ETA instead of presenting it as l
 
     await route.fulfill({ json: await trafficFixture() });
   });
+  await page.clock.install();
   await page.goto("/");
   await page.getByRole("button", { name: "Javier Prado", exact: true }).click();
 
   const traffic = page.getByRole("region", { name: "Tráfico de Javier Prado" });
 
-  await expect(traffic.getByRole("definition")).toHaveText("42 min");
+  await expect(traffic.getByRole("definition").first()).toHaveText("42 min");
   fail = true;
-  await traffic
-    .getByRole("button", { name: "Actualizar", exact: true })
-    .click();
+  await page.clock.fastForward(121_000);
   await expect(traffic.getByRole("alert")).toContainText("Revisa tu conexión");
   await expect(traffic.getByRole("definition")).toHaveCount(0);
   await expect(traffic.locator("time")).toHaveCount(0);
@@ -362,10 +366,12 @@ for (const width of [1440, 320]) {
             (await page.locator('[data-slot="drawer-popup"]').boundingBox())?.x,
         )
         .toBeLessThanOrEqual(width - (width === 320 ? 160 : 320) + 1);
-      await expect(traffic.getByRole("definition")).toHaveText("42 min");
-      await expect(
-        traffic.getByRole("button", { name: "Actualizar", exact: true }),
-      ).toBeInViewport();
+      await expect(traffic.getByRole("definition").first()).toHaveText(
+        "42 min",
+      );
+      await expect(traffic).toContainText("+14 min por tráfico");
+      await expect(traffic).toContainText("Sin tráfico: 28 min");
+      await expect(traffic.locator("time")).toBeInViewport();
       expect(
         await traffic.evaluate(
           (element) => element.scrollWidth <= element.clientWidth,

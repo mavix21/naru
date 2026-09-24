@@ -59,6 +59,7 @@ for (const corridor of corridors) {
       "https://tiles.openfreemap.org/test-glyphs/**",
     );
 
+    await page.clock.install();
     await page.goto("/");
     await page
       .getByRole("button", { name: corridor.name, exact: true })
@@ -79,18 +80,14 @@ for (const corridor of corridors) {
     const fallbackView = await captureRoute();
 
     available = true;
-    await traffic
-      .getByRole("button", { name: "Actualizar", exact: true })
-      .click();
-    await expect(traffic.getByRole("definition")).toHaveText("42 min");
+    await page.clock.fastForward(121_000);
+    await expect(traffic.getByRole("definition").first()).toHaveText("42 min");
     await expect
       .poll(async () => (await captureRoute()).equals(fallbackView))
       .toBe(false);
 
     available = false;
-    await traffic
-      .getByRole("button", { name: "Actualizar", exact: true })
-      .click();
+    await page.clock.fastForward(121_000);
     await expect(traffic.getByRole("alert")).toBeVisible();
     await expect(traffic.getByRole("definition")).toHaveCount(0);
     await expect

@@ -1,13 +1,11 @@
 "use client";
 
-import { IconRefresh } from "@tabler/icons-react";
+import { useEffect, useState } from "react";
 
 import type { TrafficObservation } from "@/domain/traffic";
 import type { useCorridorTraffic } from "@/hooks/useCorridorTraffic";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 
 function duration(seconds: number) {
   if (seconds === 0) return "0 min";
@@ -20,54 +18,66 @@ function duration(seconds: number) {
 function delayDescription(summary: TrafficObservation) {
   const delay = summary.delayVsFreeFlowSeconds ?? summary.trafficDelaySeconds;
 
-  if (delay === 0) return "Sin demora por tráfico";
+  if (delay <= 0) return "Sin demoras por tráfico";
 
-  if (delay < 0) return `${duration(-delay)} menos que en flujo libre`;
-
-  const comparison =
-    summary.delayVsFreeFlowSeconds === null
-      ? "de demora por tráfico"
-      : "más que en flujo libre";
-
-  return `+${duration(delay)} ${comparison}`;
+  return `+${duration(delay)} por tráfico`;
 }
 
 function TrafficEstimate({ summary }: { summary: TrafficObservation }) {
-  const updatedTime = new Intl.DateTimeFormat("es-PE", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-    timeZone: "America/Lima",
-  }).format(new Date(summary.retrievedAt));
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setNow(Date.now()), 30_000);
+
+    return () => window.clearInterval(interval);
+  }, []);
+
+  const minutesAgo = Math.max(
+    0,
+    Math.floor((now - Date.parse(summary.retrievedAt)) / 60_000),
+  );
+
+  const freshness =
+    minutesAgo === 0
+      ? "Actualizado ahora"
+      : `Actualizado hace ${minutesAgo} min`;
 
   const distance = new Intl.NumberFormat("es-PE", {
     maximumFractionDigits: 1,
   }).format(summary.distanceMeters / 1000);
 
   return (
-    <div className="space-y-3">
-      <dl>
-        <dt className="text-xs text-muted-foreground">Tiempo estimado ahora</dt>
-        <dd className="mt-1 text-3xl font-semibold tracking-tight tabular-nums">
-          {duration(summary.travelTimeSeconds)}
-        </dd>
+    <div>
+      <dl className="space-y-3">
+        <div>
+          <dt className="sr-only">Tiempo estimado ahora</dt>
+          <dd className="text-3xl leading-none font-semibold tracking-tight tabular-nums">
+            {duration(summary.travelTimeSeconds)}
+          </dd>
+        </div>
+        <div className="space-y-1">
+          <dt className="sr-only">Impacto del tráfico</dt>
+          <dd className="text-sm leading-snug font-medium tabular-nums">
+            {delayDescription(summary)}
+          </dd>
+          <dt className="sr-only">Tiempo sin tráfico</dt>
+          <dd className="text-xs leading-snug text-muted-foreground tabular-nums">
+            Sin tráfico:{" "}
+            {summary.freeFlowTravelTimeSeconds === null
+              ? "no disponible"
+              : duration(summary.freeFlowTravelTimeSeconds)}
+          </dd>
+        </div>
       </dl>
-      <div className="space-y-1">
-        <p className="font-medium tabular-nums">{delayDescription(summary)}</p>
-        <p className="text-xs text-muted-foreground tabular-nums">
-          {summary.freeFlowTravelTimeSeconds === null
-            ? "Tiempo sin congestión no disponible"
-            : `${duration(summary.freeFlowTravelTimeSeconds)} sin congestión`}
-        </p>
-      </div>
-      <p className="text-xs text-muted-foreground">{distance} km · En auto</p>
-      <p className="text-xs text-muted-foreground">
-        Actualizado a las{" "}
-        <time dateTime={summary.retrievedAt} title="Hora de Lima">
-          {updatedTime}
+      <div className="mt-4 space-y-1 border-t pt-3 text-xs text-muted-foreground">
+        <p>{distance} km · En auto</p>
+        <time
+          dateTime={summary.retrievedAt}
+          className="block text-[11px] leading-snug"
+        >
+          {freshness}
         </time>
-      </p>
+      </div>
     </div>
   );
 }
@@ -80,12 +90,12 @@ const failureMessages = {
   "provider-error": {
     title: "No pudimos consultar el tráfico",
     description:
-      "TomTom no devolvió una respuesta válida. Intenta actualizar de nuevo.",
+      "No hay datos disponibles por ahora. Volveremos a intentarlo en unos minutos.",
   },
   unavailable: {
     title: "Tráfico no disponible por ahora",
     description:
-      "No podemos obtener una estimación para este recorrido. Intenta de nuevo en unos minutos.",
+      "No podemos obtener una estimación para este recorrido por ahora.",
   },
 };
 
@@ -101,20 +111,19 @@ export default function CorridorTraffic({
   const failure = traffic.isError
     ? {
         title: "No pudimos actualizar",
-        description: "Revisa tu conexión e intenta de nuevo.",
+        description:
+          "Revisa tu conexión. Volveremos a intentarlo en unos minutos.",
       }
     : result && result.status !== "ready"
       ? failureMessages[result.status]
       : null;
 
   return (
-    <section
-      aria-label={`Tráfico de ${corridorName}`}
-      className="space-y-4 pb-4"
-    >
-      <Separator />
-      <h2 className="font-medium">Tráfico actual</h2>
-      <div aria-live="polite" aria-busy={traffic.isFetching}>
+    <section aria-label={`Tráfico de ${corridorName}`} className="pb-4 pt-5">
+      <h2 className="text-xs font-medium text-muted-foreground">
+        Tiempo de viaje ahora
+      </h2>
+      <div className="mt-2" aria-live="polite" aria-busy={traffic.isFetching}>
         {traffic.isPending ? (
           <output className="text-sm text-muted-foreground">
             Consultando tráfico…
@@ -127,23 +136,6 @@ export default function CorridorTraffic({
         ) : result?.status === "ready" ? (
           <TrafficEstimate summary={result.observation} />
         ) : null}
-      </div>
-      <div className="space-y-2">
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={traffic.isFetching}
-          onClick={() => void traffic.refetch()}
-          className="w-full"
-        >
-          <IconRefresh aria-hidden="true" />
-          {traffic.isFetching ? "Consultando…" : "Actualizar"}
-        </Button>
-        <p className="text-xs text-muted-foreground">
-          {result?.status === "not-configured"
-            ? "TomTom · Routing API"
-            : "TomTom · Se actualiza cada 2 min mientras lo ves."}
-        </p>
       </div>
     </section>
   );
