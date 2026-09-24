@@ -36,6 +36,11 @@
       "type": "remote",
       "url": "https://api.mobbin.com/mcp",
       "enabled": true
+    },
+    "stellar-raven": {
+      "type": "remote",
+      "url": "https://raven.stellar.org/mcp",
+      "enabled": true
     }
   },
   "permission": {
