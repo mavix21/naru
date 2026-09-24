@@ -1,11 +1,15 @@
 import { z } from "zod";
 
-export const JAVIER_PRADO_ROUTE_ID = "javier-prado-arequipa-monitor-eastbound";
-
 const seconds = z.number().nonnegative();
 
-export const trafficSummarySchema = z.object({
-  routeId: z.literal(JAVIER_PRADO_ROUTE_ID),
+export const trafficObservationSchema = z.object({
+  routeId: z.string().min(1),
+  // The exact measured route, in domain/map [longitude, latitude] order.
+  points: z
+    .array(
+      z.tuple([z.number().min(-180).max(180), z.number().min(-90).max(90)]),
+    )
+    .min(2),
   travelTimeSeconds: seconds.positive(),
   freeFlowTravelTimeSeconds: seconds.nullable(),
   // Best-estimate ETA minus the free-flow ETA for this same route.
@@ -18,10 +22,13 @@ export const trafficSummarySchema = z.object({
   retrievedAt: z.iso.datetime(),
 });
 
-export type TrafficSummary = z.infer<typeof trafficSummarySchema>;
+export type TrafficObservation = z.infer<typeof trafficObservationSchema>;
 
 export const trafficResultSchema = z.discriminatedUnion("status", [
-  z.object({ status: z.literal("ready"), summary: trafficSummarySchema }),
+  z.object({
+    status: z.literal("ready"),
+    observation: trafficObservationSchema,
+  }),
   z.object({ status: z.literal("not-configured") }),
   z.object({ status: z.literal("provider-error") }),
   z.object({ status: z.literal("unavailable") }),

@@ -1,40 +1,52 @@
 "use client";
 
-import type { Map as MapLibreMap } from "maplibre-gl";
+import type {
+  GeoJSONSource,
+  GeoJSONSourceSpecification,
+  Map as MapLibreMap,
+} from "maplibre-gl";
 
 import { useEffect, useRef } from "react";
 
-import type { Corridor } from "@/domain/corridors";
-
-import { corridors } from "@/domain/corridors";
+import type { Corridor, GeographicPoint } from "@/domain/corridors";
 
 const BASEMAP_STYLE = "https://tiles.openfreemap.org/styles/positron";
 
 const LIMA_CENTER: [number, number] = [-77.0428, -12.0464];
 
-const ROUTE_LAYERS = [
-  "corridor-routes-casing",
-  "corridor-routes-line",
-  "corridor-routes-label",
-];
+function corridorFeature(
+  corridor: Corridor,
+  points: readonly GeographicPoint[],
+): GeoJSONSourceSpecification["data"] {
+  return {
+    type: "Feature",
+    properties: {
+      id: corridor.routes[0].id,
+      corridorId: corridor.id,
+      name: corridor.name,
+    },
+    geometry: {
+      type: "LineString",
+      coordinates: points.map(([longitude, latitude]) => [longitude, latitude]),
+    },
+  };
+}
 
 function corridorBounds(
-  corridor: Corridor,
+  points: readonly GeographicPoint[],
 ): [[number, number], [number, number]] {
-  const [longitude, latitude] = corridor.routes[0].points[0];
+  const [longitude, latitude] = points[0];
 
   const bounds: [[number, number], [number, number]] = [
     [longitude, latitude],
     [longitude, latitude],
   ];
 
-  for (const route of corridor.routes) {
-    for (const [routeLongitude, routeLatitude] of route.points) {
-      bounds[0][0] = Math.min(bounds[0][0], routeLongitude);
-      bounds[0][1] = Math.min(bounds[0][1], routeLatitude);
-      bounds[1][0] = Math.max(bounds[1][0], routeLongitude);
-      bounds[1][1] = Math.max(bounds[1][1], routeLatitude);
-    }
+  for (const [routeLongitude, routeLatitude] of points) {
+    bounds[0][0] = Math.min(bounds[0][0], routeLongitude);
+    bounds[0][1] = Math.min(bounds[0][1], routeLatitude);
+    bounds[1][0] = Math.max(bounds[1][0], routeLongitude);
+    bounds[1][1] = Math.max(bounds[1][1], routeLatitude);
   }
 
   return bounds;
@@ -42,17 +54,10 @@ function corridorBounds(
 
 function focusCorridor(
   map: MapLibreMap,
-  selectedCorridorId: string,
+  points: readonly GeographicPoint[],
   detailsOpen: boolean,
   duration: number,
 ) {
-  const corridor =
-    corridors.find((item) => item.id === selectedCorridorId) ?? corridors[0];
-
-  for (const layerId of ROUTE_LAYERS) {
-    map.setFilter(layerId, ["==", ["get", "corridorId"], corridor.id]);
-  }
-
   const width = map.getContainer().clientWidth;
   const drawerWidth = width < 640 ? width / 2 : 320;
 
@@ -62,7 +67,7 @@ function focusCorridor(
 
   if (controls) controls.style.right = detailsOpen ? `${drawerWidth}px` : "";
 
-  map.fitBounds(corridorBounds(corridor), {
+  map.fitBounds(corridorBounds(points), {
     padding: {
       top: 56,
       right: detailsOpen ? drawerWidth + 24 : 48,
@@ -75,15 +80,17 @@ function focusCorridor(
 }
 
 export default function LimaMap({
-  selectedCorridorId,
+  corridor,
+  points,
   detailsOpen,
 }: {
-  selectedCorridorId: string;
+  corridor: Corridor;
+  points: readonly GeographicPoint[];
   detailsOpen: boolean;
 }) {
   const containerRef = useRef<HTMLElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
-  const selectionRef = useRef({ selectedCorridorId, detailsOpen });
+  const selectionRef = useRef({ corridor, points, detailsOpen });
 
   useEffect(() => {
     let disposed = false;
@@ -110,28 +117,11 @@ export default function LimaMap({
       map.on("load", () => {
         if (disposed) return;
 
+        const { corridor, points, detailsOpen } = selectionRef.current;
+
         map.addSource("corridor-routes", {
           type: "geojson",
-          data: {
-            type: "FeatureCollection",
-            features: corridors.flatMap((corridor) =>
-              corridor.routes.map((route) => ({
-                type: "Feature",
-                properties: {
-                  id: route.id,
-                  corridorId: corridor.id,
-                  name: corridor.name,
-                },
-                geometry: {
-                  type: "LineString",
-                  coordinates: route.points.map(([longitude, latitude]) => [
-                    longitude,
-                    latitude,
-                  ]),
-                },
-              })),
-            ),
-          },
+          data: corridorFeature(corridor, points),
         });
 
         map.addLayer({
@@ -171,18 +161,16 @@ export default function LimaMap({
           },
         });
 
-        const { selectedCorridorId, detailsOpen } = selectionRef.current;
-
-        focusCorridor(map, selectedCorridorId, detailsOpen, 0);
+        focusCorridor(map, points, detailsOpen, 0);
       });
     }
 
     function handleResize() {
       if (!mapRef.current?.getLayer("corridor-routes-line")) return;
 
-      const { selectedCorridorId, detailsOpen } = selectionRef.current;
+      const { points, detailsOpen } = selectionRef.current;
 
-      focusCorridor(mapRef.current, selectedCorridorId, detailsOpen, 0);
+      focusCorridor(mapRef.current, points, detailsOpen, 0);
     }
 
     void initializeMap();
@@ -197,17 +185,30 @@ export default function LimaMap({
   }, []);
 
   useEffect(() => {
-    selectionRef.current = { selectedCorridorId, detailsOpen };
+    const previous = selectionRef.current;
+
+    selectionRef.current = { corridor, points, detailsOpen };
 
     if (!mapRef.current?.getLayer("corridor-routes-line")) return;
+
+    if (previous.corridor !== corridor || previous.points !== points) {
+      mapRef.current
+        .getSource<GeoJSONSource>("corridor-routes")
+        ?.setData(corridorFeature(corridor, points));
+    }
+
+    // Refreshing an observation should update its line without undoing a pan
+    // or zoom. Reframe only when selection or the drawer's footprint changes.
+    if (previous.corridor === corridor && previous.detailsOpen === detailsOpen)
+      return;
 
     const duration = window.matchMedia("(prefers-reduced-motion: reduce)")
       .matches
       ? 0
       : 650;
 
-    focusCorridor(mapRef.current, selectedCorridorId, detailsOpen, duration);
-  }, [selectedCorridorId, detailsOpen]);
+    focusCorridor(mapRef.current, points, detailsOpen, duration);
+  }, [corridor, points, detailsOpen]);
 
   return (
     <section

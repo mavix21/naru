@@ -13,9 +13,10 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer";
 import { corridors } from "@/domain/corridors";
+import { useCorridorTraffic } from "@/hooks/useCorridorTraffic";
 
 import LimaMap from "../map/LimaMap";
-import JavierPradoTraffic from "./JavierPradoTraffic";
+import CorridorTraffic from "./CorridorTraffic";
 
 export default function CorridorExplorer() {
   const [selectedCorridorId, setSelectedCorridorId] = useState(corridors[0].id);
@@ -26,11 +27,18 @@ export default function CorridorExplorer() {
     corridors[0];
 
   const selectedRoute = selectedCorridor.routes[0];
+  const traffic = useCorridorTraffic(selectedCorridor, detailsOpen);
+
+  const observation =
+    !traffic.isError && traffic.data?.status === "ready"
+      ? traffic.data.observation
+      : null;
 
   return (
     <section className="relative h-dvh min-h-80 overflow-hidden bg-muted">
       <LimaMap
-        selectedCorridorId={selectedCorridorId}
+        corridor={selectedCorridor}
+        points={observation?.points ?? selectedRoute.points}
         detailsOpen={detailsOpen}
       />
       <header className="pointer-events-none absolute top-4 left-4 z-10 rounded-lg border bg-background/95 px-4 py-3 shadow-sm backdrop-blur-sm sm:top-6 sm:left-6">
@@ -104,8 +112,11 @@ export default function CorridorExplorer() {
                 </dd>
               </div>
             </dl>
-            {detailsOpen && selectedCorridor.id === "javier-prado" && (
-              <JavierPradoTraffic />
+            {detailsOpen && (
+              <CorridorTraffic
+                corridorName={selectedCorridor.name}
+                traffic={traffic}
+              />
             )}
           </div>
         </DrawerContent>

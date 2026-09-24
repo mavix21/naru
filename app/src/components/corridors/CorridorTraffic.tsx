@@ -2,12 +2,12 @@
 
 import { IconRefresh } from "@tabler/icons-react";
 
-import type { TrafficSummary } from "@/domain/traffic";
+import type { TrafficObservation } from "@/domain/traffic";
+import type { useCorridorTraffic } from "@/hooks/useCorridorTraffic";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { useJavierPradoTraffic } from "@/hooks/useJavierPradoTraffic";
 
 function duration(seconds: number) {
   if (seconds === 0) return "0 min";
@@ -17,7 +17,7 @@ function duration(seconds: number) {
   return `${Math.round(seconds / 60)} min`;
 }
 
-function delayDescription(summary: TrafficSummary) {
+function delayDescription(summary: TrafficObservation) {
   const delay = summary.delayVsFreeFlowSeconds ?? summary.trafficDelaySeconds;
 
   if (delay === 0) return "Sin demora por tráfico";
@@ -32,7 +32,7 @@ function delayDescription(summary: TrafficSummary) {
   return `+${duration(delay)} ${comparison}`;
 }
 
-function TrafficEstimate({ summary }: { summary: TrafficSummary }) {
+function TrafficEstimate({ summary }: { summary: TrafficObservation }) {
   const updatedTime = new Intl.DateTimeFormat("es-PE", {
     hour: "2-digit",
     minute: "2-digit",
@@ -89,8 +89,13 @@ const failureMessages = {
   },
 };
 
-export default function JavierPradoTraffic() {
-  const traffic = useJavierPradoTraffic();
+export default function CorridorTraffic({
+  corridorName,
+  traffic,
+}: {
+  corridorName: string;
+  traffic: ReturnType<typeof useCorridorTraffic>;
+}) {
   const result = traffic.data;
 
   const failure = traffic.isError
@@ -103,7 +108,10 @@ export default function JavierPradoTraffic() {
       : null;
 
   return (
-    <section aria-label="Tráfico de Javier Prado" className="space-y-4 pb-4">
+    <section
+      aria-label={`Tráfico de ${corridorName}`}
+      className="space-y-4 pb-4"
+    >
       <Separator />
       <h2 className="font-medium">Tráfico actual</h2>
       <div aria-live="polite" aria-busy={traffic.isFetching}>
@@ -117,7 +125,7 @@ export default function JavierPradoTraffic() {
             <AlertDescription>{failure.description}</AlertDescription>
           </Alert>
         ) : result?.status === "ready" ? (
-          <TrafficEstimate summary={result.summary} />
+          <TrafficEstimate summary={result.observation} />
         ) : null}
       </div>
       <div className="space-y-2">

@@ -9,6 +9,12 @@ for (const viewport of [
     page,
   }) => {
     await page.setViewportSize(viewport);
+    await page.route("**/api/traffic/*", (route) =>
+      route.fulfill({
+        status: 503,
+        json: { status: "unavailable" },
+      }),
+    );
 
     const tileLoaded = page.waitForResponse(
       (response) =>
@@ -79,7 +85,9 @@ for (const viewport of [
       selector.getByRole("button", { name: "Avenida Arequipa" }),
     ).toHaveAttribute("aria-pressed", "true");
 
-    await selector.getByRole("button", { name: "Vía Expresa" }).click();
+    // Also exercise keyboard selection; the dev-server badge overlaps this
+    // bottom-left control when Playwright disables browser caching.
+    await selector.getByRole("button", { name: "Vía Expresa" }).press("Enter");
     await expect(drawer).toContainText("Vía Expresa");
     await expect(drawer).toContainText("Av. Benavides");
     await expect(

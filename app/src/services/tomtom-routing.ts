@@ -1,7 +1,7 @@
 import { z } from "zod";
 
-import { corridors, type GeographicPoint } from "../domain/corridors";
-import { JAVIER_PRADO_ROUTE_ID, type TrafficResult } from "../domain/traffic";
+import type { CorridorRoute, GeographicPoint } from "../domain/corridors";
+import type { TrafficResult } from "../domain/traffic";
 
 const tomtomPointSchema = z.object({
   latitude: z.number().min(-90).max(90),
@@ -142,20 +142,15 @@ function followsCorridor(
 
 // Only the server route supplies credentials. Injecting fetch keeps the real
 // HTTP boundary testable without replacing modules or contacting paid products.
-export async function fetchJavierPradoTraffic(
+export async function fetchCorridorTraffic(
+  route: CorridorRoute,
   apiKey: string | undefined,
   signal: AbortSignal,
   fetcher: typeof fetch = fetch,
 ): Promise<TrafficResult> {
   if (!apiKey?.trim()) return { status: "not-configured" };
 
-  const corridor = corridors.find((item) => item.id === "javier-prado");
-
-  const route = corridor?.routes.find(
-    (item) => item.id === JAVIER_PRADO_ROUTE_ID,
-  );
-
-  if (!route || route.points.length < 2) return { status: "unavailable" };
+  if (route.points.length < 2) return { status: "unavailable" };
 
   // MapLibre uses [longitude, latitude]; TomTom requires latitude,longitude.
   // These are map-trace vertices, not stopover checkpoints. Making each one a
@@ -252,8 +247,12 @@ export async function fetchJavierPradoTraffic(
 
     return {
       status: "ready",
-      summary: {
-        routeId: JAVIER_PRADO_ROUTE_ID,
+      observation: {
+        routeId: route.id,
+        points: result.legs[0].points.map(({ longitude, latitude }) => [
+          longitude,
+          latitude,
+        ]),
         travelTimeSeconds: summary.travelTimeInSeconds,
         freeFlowTravelTimeSeconds: freeFlow,
         delayVsFreeFlowSeconds:

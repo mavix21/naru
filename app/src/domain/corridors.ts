@@ -8,6 +8,8 @@ export type CorridorRoute = {
   direction: string;
   origin: string;
   destination: string;
+  // Ordered routing checkpoints: first = origin, last = destination. Also used
+  // as the fallback map trace until a live observation supplies road geometry.
   points: readonly GeographicPoint[];
 };
 

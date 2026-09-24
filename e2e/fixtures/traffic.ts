@@ -1,12 +1,8 @@
 import { corridors } from "../../app/src/domain/corridors";
+import { fetchCorridorTraffic } from "../../app/src/services/tomtom-routing";
 
 // Synthetic provider responses are exclusively test fixtures, never app data.
-export function tomtomTrafficFixture() {
-  const route = corridors.find((corridor) => corridor.id === "javier-prado")
-    ?.routes[0];
-
-  if (!route) throw new Error("Missing Javier Prado test corridor");
-
+export function tomtomTrafficFixture(route = corridors[0].routes[0]) {
   const points = route.points.map(([longitude, latitude]) => ({
     latitude,
     longitude,
@@ -27,4 +23,21 @@ export function tomtomTrafficFixture() {
       },
     ],
   };
+}
+
+export async function trafficFixture(
+  corridor = corridors[0],
+  travelTime = 2520,
+) {
+  const route = corridor.routes[0];
+  const fixture = tomtomTrafficFixture(route);
+
+  fixture.routes[0].summary.travelTimeInSeconds = travelTime;
+
+  return fetchCorridorTraffic(
+    route,
+    "test-only-key",
+    new AbortController().signal,
+    async () => Response.json(fixture),
+  );
 }
