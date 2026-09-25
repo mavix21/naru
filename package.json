@@ -7,13 +7,14 @@
     "app",
     "app-lib",
     "app-lib/clients/*",
+    "contracts",
     "e2e"
   ],
   "scripts": {
     "predev": "node scripts/dev-guard.mjs",
-    "dev": "pnpm --filter @naru/app watch",
+    "dev": "turbo run dev",
     "prestart": "node scripts/dev-guard.mjs",
-    "start": "pnpm --dir app watch",
+    "start": "turbo run dev",
     "lint": "pnpm -r --if-present run lint && oxlint app-lib e2e scripts --deny-warnings",
     "format": "oxfmt . --ignore-path=.oxfmtignore",
     "format:check": "oxfmt . --check --ignore-path=.oxfmtignore"
@@ -21,7 +22,8 @@
   "devDependencies": {
     "@oxlint/plugins": "1.85.0",
     "oxfmt": "^0.70.0",
-    "oxlint": "1.85.0"
+    "oxlint": "1.85.0",
+    "turbo": "^2.11.3"
   },
   "packageManager": "pnpm@11.25.0"
 }

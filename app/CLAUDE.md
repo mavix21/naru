@@ -2,7 +2,7 @@
 
 ## Commands
 
-- `pnpm dev` from the repository root starts the contract watcher and Next.js.
+- `pnpm dev` from the repository root starts the contract watcher and Next.js in Turbo.
 - `pnpm --dir app dev` starts only Next.js (no local network needed).
 - `pnpm --dir app build` runs the production build and typecheck.
 - `pnpm --dir app start` serves the production build.

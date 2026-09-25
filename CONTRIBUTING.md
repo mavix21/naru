@@ -11,6 +11,8 @@ environment variables, and available checks.
 - `e2e/` retains Playwright configuration for future app tests.
 
 Run `pnpm --dir app dev` for app-only development. `pnpm dev` additionally
-starts the Stellar Scaffold contract-client watcher and requires its CLI tools.
+starts the Stellar Scaffold contract-client watcher in Turbo's interactive view
+and requires its CLI tools. New workspace packages with a `dev` script join the
+same view automatically.
 Use `pnpm lint`, `pnpm format:check`, `pnpm --dir app typecheck`,
 `pnpm --dir app build`, and `cargo test --workspace` for checks.

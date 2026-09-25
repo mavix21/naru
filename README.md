@@ -21,8 +21,11 @@ requiring the Stellar CLI, a local network, or traffic API credentials.
 For contract development, install Rust with the target from the
 [Stellar smart contract setup guide](https://developers.stellar.org/docs/build/smart-contracts/getting-started/setup),
 the Stellar CLI, and the Stellar Scaffold CLI. `pnpm dev` then runs the existing
-contract-client watcher alongside Next.js. The retained example contracts and
-their build configuration live in `contracts/` and `environments.toml`.
+contract-client watcher alongside Next.js in Turbo's interactive task view.
+Select the `@naru/app` or `@naru/contracts` task to see its output. New workspace
+packages with a `dev` script (such as Convex later) join `pnpm dev` automatically.
+The retained example contracts and their build configuration live in
+`contracts/` and `environments.toml`.
 
 ## Environment
 
@@ -43,16 +46,18 @@ when using wallet or contract functionality, but not to render the homepage.
 The app currently renders a minimal responsive Naru page. The repository still
 contains its Next.js, TypeScript, Tailwind/shadcn, wallet, Stellar, and Soroban
 foundation, including generic example contracts and a contract debug route.
-There is no companion setup, authentication flow, payment flow, bill splitting,
-or financial logic implemented yet.
+Slice 1 adds a gated `/dev/smart-account` technical validation screen for testnet
+passkey smart accounts and backend-sponsored test XLM transfers. See
+[setup, implementation notes, and manual acceptance](docs/smart-account-slice-1.md).
+There is no final onboarding, companion setup, bill splitting, or real-funds flow.
 
 Planned experiences include sending and receiving money, splitting bills and
 managing payment requests with a companion, and eventually sending money to an
 email address before its owner has an account. These are plans, not working
 features.
 
-**Next slice:** companion identity onboarding: choose a companion name, avatar,
-and color with a live preview.
+Native-passkey testnet acceptance for Slice 1 requires a configured testnet
+sponsor/recipient and human passkey prompts; it is not yet recorded as complete.
 
 ## Checks
 
@@ -60,6 +65,7 @@ and color with a live preview.
 pnpm lint
 pnpm format:check
 pnpm --dir app typecheck
+pnpm --dir app test:smart-account
 pnpm --dir app build
 cargo test --workspace
 ```
