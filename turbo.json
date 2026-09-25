@@ -5,7 +5,27 @@
     "dev": {
       "cache": false,
       "persistent": true,
-      "passThroughEnv": ["STELLAR_*", "XDG_CONFIG_HOME", "NEXT_PUBLIC_*"]
+      "passThroughEnv": [
+        "STELLAR_*",
+        "XDG_CONFIG_HOME",
+        "NEXT_PUBLIC_*",
+        "CLERK_*",
+        "CONVEX_*",
+        "NARU_SMART_ACCOUNT_*"
+      ]
+    },
+    "build": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", ".env*"],
+      "outputs": [".next/**", "!.next/cache/**"],
+      "env": ["NEXT_PUBLIC_*", "CLERK_*"],
+      "passThroughEnv": ["NARU_SMART_ACCOUNT_*"]
+    },
+    "@naru/backend#build": {
+      "outputs": []
+    },
+    "typecheck": {
+      "dependsOn": ["^typecheck"]
     }
   }
 }

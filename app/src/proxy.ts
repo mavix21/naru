@@ -1,12 +1,19 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { clerkMiddleware } from "@clerk/nextjs/server";
+import {
+  NextResponse,
+  type NextFetchEvent,
+  type NextRequest,
+} from "next/server";
 
-import { gateResponse, gateStatus } from "@/lib/smart-account/gate";
+import { getAuthConfig } from "@/lib/auth/config";
 
-export function proxy(request: NextRequest) {
-  const status = gateStatus(request.headers);
+const clerk = clerkMiddleware({ signInUrl: "/sign-in", signUpUrl: "/sign-up" });
 
-  if (status !== 200) return gateResponse(status);
-  const response = NextResponse.next();
+export async function proxy(request: NextRequest, event: NextFetchEvent) {
+  const response = getAuthConfig()
+    ? (await clerk(request, event)) || NextResponse.next()
+    : NextResponse.next();
+
   response.headers.set("Cache-Control", "no-store");
   response.headers.set("X-Robots-Tag", "noindex, nofollow");
 
@@ -14,5 +21,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dev/smart-account/:path*", "/api/dev/smart-account/:path*"],
+  matcher: ["/sign-in/:path*", "/sign-up/:path*"],
 };

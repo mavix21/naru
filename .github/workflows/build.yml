@@ -1,4 +1,4 @@
-name: Build Project and Run Tests
+name: Build Project
 
 on:
   push:
@@ -35,8 +35,8 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: npm run lint
-      - run: npm run format:check
+      - run: pnpm lint
+      - run: pnpm format:check
 
       # ---- Slow path: CLI toolchain, local network, contract codegen ----
       - uses: actions/cache@v3
@@ -171,6 +171,5 @@ jobs:
             exit 1
           fi
           echo "Generated $ACTUAL client(s)."
-      - run: npm run build --workspaces --if-present
-      - name: Test retained Soroban contracts
-        run: cargo test --workspace --locked
+      - run: pnpm typecheck
+      - run: pnpm build

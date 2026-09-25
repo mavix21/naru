@@ -4,7 +4,7 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
   output: "standalone",
-  transpilePackages: ["@stellar-scaffold/app-lib"],
+  transpilePackages: ["@stellar-scaffold/app-lib", "@naru/backend"],
   async rewrites() {
     return [
       { source: "/friendbot", destination: "http://localhost:8000/friendbot" },

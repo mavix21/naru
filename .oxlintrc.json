@@ -12,6 +12,7 @@
     ".roo/**",
     ".windsurf/**",
     "app-lib/clients/**",
+    "backend/convex/_generated/**",
     "tools/oxlint/anti-slop/**"
   ],
   "jsPlugins": [

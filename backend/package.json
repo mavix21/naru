@@ -1,0 +1,27 @@
+{
+  "name": "@naru/backend",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Naru Convex backend and client-safe generated references",
+  "type": "module",
+  "exports": {
+    "./api": "./convex/_generated/api.js",
+    "./data-model": {
+      "types": "./convex/_generated/dataModel.d.ts"
+    }
+  },
+  "scripts": {
+    "dev": "convex dev",
+    "codegen": "convex codegen",
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint --deny-warnings convex"
+  },
+  "dependencies": {
+    "convex": "1.46.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^6.0.2"
+  }
+}

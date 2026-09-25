@@ -10,11 +10,13 @@ import { WalletProvider } from "../providers/WalletProvider";
 function OptionalWalletProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
 
-  return pathname === "/dev/smart-account" ? (
-    children
-  ) : (
-    <WalletProvider>{children}</WalletProvider>
-  );
+  const withoutWallet =
+    pathname === "/sign-in" ||
+    pathname?.startsWith("/sign-in/") ||
+    pathname === "/sign-up" ||
+    pathname?.startsWith("/sign-up/");
+
+  return withoutWallet ? children : <WalletProvider>{children}</WalletProvider>;
 }
 
 export default function Providers({ children }: { children: ReactNode }) {

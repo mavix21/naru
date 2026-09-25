@@ -21,11 +21,9 @@ import {
 } from "./shared";
 import { validateTransferReview } from "./transfer";
 
-const endpoint = "/api/dev/smart-account";
-
 const errorSchema = z.object({ error: z.string() });
 
-async function request(path: string, body?: string) {
+async function request(endpoint: string, path: string, body?: string) {
   const options: RequestInit = {
     cache: "no-store",
     credentials: "same-origin",
@@ -55,19 +53,22 @@ export class NaruSmartAccount {
   config: SmartAccountConfig;
   private kit: SmartAccountKit;
   private storage: IndexedDBStorage;
+  private endpoint: string;
   private connected = false;
 
   private constructor(
     config: SmartAccountConfig,
     kit: SmartAccountKit,
     storage: IndexedDBStorage,
+    endpoint: string,
   ) {
     this.config = config;
     this.kit = kit;
     this.storage = storage;
+    this.endpoint = endpoint;
   }
 
-  static async open() {
+  static async open(endpoint: string) {
     if (
       !window.isSecureContext ||
       !window.PublicKeyCredential ||
@@ -78,7 +79,7 @@ export class NaruSmartAccount {
       );
     }
 
-    const config = configSchema.parse(await request(""));
+    const config = configSchema.parse(await request(endpoint, ""));
 
     if (window.location.origin !== config.origin)
       throw new Error(
@@ -108,7 +109,7 @@ export class NaruSmartAccount {
       signatureExpirationLedgers: 60,
     });
 
-    return new NaruSmartAccount(config, kit, storage);
+    return new NaruSmartAccount(config, kit, storage, endpoint);
   }
 
   async metadata(): Promise<StoredCredential | null> {
@@ -128,7 +129,10 @@ export class NaruSmartAccount {
     if (!metadata) return null;
 
     const status = statusSchema.parse(
-      await request(`?account=${encodeURIComponent(metadata.contractId)}`),
+      await request(
+        this.endpoint,
+        `?account=${encodeURIComponent(metadata.contractId)}`,
+      ),
     );
 
     const deployment = status.jobs.find(
@@ -171,6 +175,7 @@ export class NaruSmartAccount {
 
     return jobSchema.parse(
       await request(
+        this.endpoint,
         "",
         JSON.stringify({
           action: "deploy",
@@ -208,6 +213,7 @@ export class NaruSmartAccount {
 
     return jobSchema.parse(
       await request(
+        this.endpoint,
         "",
         JSON.stringify({
           action: "deploy",
@@ -260,6 +266,7 @@ export class NaruSmartAccount {
   async fund() {
     return jobSchema.parse(
       await request(
+        this.endpoint,
         "",
         JSON.stringify({ action: "fund", account: await this.account() }),
       ),
@@ -269,6 +276,7 @@ export class NaruSmartAccount {
   async review() {
     return reviewSchema.parse(
       await request(
+        this.endpoint,
         "",
         JSON.stringify({ action: "review", account: await this.account() }),
       ),
@@ -303,6 +311,7 @@ export class NaruSmartAccount {
 
     return jobSchema.parse(
       await request(
+        this.endpoint,
         "",
         JSON.stringify({
           action: "authorize",

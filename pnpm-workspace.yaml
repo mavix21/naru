@@ -2,11 +2,12 @@ packages:
   - "app"
   - "app-lib"
   - "app-lib/clients/*"
+  - "backend"
   - "contracts"
-  - "e2e"
 allowBuilds:
   "@reown/appkit": false
   bufferutil: true
+  esbuild: true
   secp256k1: true
   unrs-resolver: true
   utf-8-validate: true
@@ -22,3 +23,7 @@ minimumReleaseAgeExclude:
   - "@next/swc-win32-x64-msvc@16.3.6"
   - next@16.3.6
   - "@shadcn/lint@0.2.0"
+  - "@clerk/backend@3.20.1"
+  - "@clerk/nextjs@7.9.7"
+  - "@clerk/react@6.17.2"
+  - "@clerk/shared@4.36.0"

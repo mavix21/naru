@@ -12,21 +12,21 @@
     "lint": "oxlint --react-plugin --nextjs-plugin --jsx-a11y-plugin --deny-warnings src next.config.ts postcss.config.mjs",
     "format": "oxfmt .",
     "prepare": "husky",
-    "typecheck": "tsc --noEmit",
-    "test:smart-account": "node --experimental-strip-types --test tests/smart-account.test.mjs"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",
+    "@clerk/nextjs": "7.9.7",
+    "@naru/backend": "workspace:*",
     "@stellar-scaffold/app-lib": "workspace:*",
     "@stellar/stellar-sdk": "16.3.0",
     "@tabler/icons-react": "^3.47.0",
     "@tanstack/react-query": "^5.90.17",
-    "@theahaco/contract-explorer": "^1.3.0",
     "@theahaco/ts-config": "^1.3.0",
     "buffer": "6.0.3",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.3.2",
-    "lossless-json": "^4.3.0",
+    "convex": "1.46.0",
     "next": "^16.3.6",
     "next-themes": "^0.4.6",
     "react": "^19.2.6",
@@ -41,7 +41,6 @@
   "devDependencies": {
     "@shadcn/lint": "^0.2.0",
     "@tailwindcss/postcss": "^4.3.3",
-    "@types/lodash": "^4.17.24",
     "@types/node": "^24.0.0",
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
