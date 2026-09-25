@@ -4,7 +4,7 @@ import { Server, type Api } from "@stellar/stellar-sdk/rpc";
 import { rpcUrl, stellarNetwork } from "./env";
 
 /** A Soroban contract event delivered to a subscription callback. Re-exported so
- * templates depend only on @stellar-scaffold/app-lib, not @stellar/stellar-sdk. */
+ * the app depends on the shared package rather than @stellar/stellar-sdk directly. */
 export type SubscriptionEvent = Api.EventResponse;
 
 type PagingKey = string;

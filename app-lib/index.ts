@@ -1,7 +1,5 @@
-// @stellar-scaffold/app-lib — shared, framework-agnostic layer for the UI monorepo.
-// One authored copy, imported by every template (and by the generated Contract
-// Clients in app-lib/clients/index.ts). Framework-specific code (providers,
-// stores, UI components) stays in each template.
+// Shared, framework-agnostic layer for Naru and the generated contract clients.
+// The package name is kept for compatibility with Stellar Scaffold's bindings.
 
 export * from "./env"; // rpcUrl, networkPassphrase, stellarNetwork, horizonUrl, network, labPrefix
 

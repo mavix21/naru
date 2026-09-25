@@ -1,8 +1,8 @@
 {
-  "name": "@stellar-scaffold/ui-e2e",
+  "name": "@naru/e2e",
   "version": "0.0.0",
   "private": true,
-  "description": "Playwright UI-smoke parity tests run against every framework template.",
+  "description": "Playwright workspace for Naru app tests.",
   "type": "module",
   "scripts": {
     "test": "playwright test"

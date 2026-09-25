@@ -3,12 +3,8 @@ import { existsSync, readdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-// Self-adapting target list, so the same suite works in both lifecycle states
-// without `init` having to rewrite this file:
-//   - Post-init (user project): only the instantiated `app/` exists → 1 target.
-//   - Contributor view (UI monorepo): one target per `templates/<framework>/`.
-// The shared, framework-agnostic specs then run against whichever targets exist,
-// which is what enforces feature parity between templates.
+// Target Naru's app/ workspace. Keep the template fallback for scaffold tooling
+// that also uses this Playwright configuration.
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 type Target = { name: string; cwd: string; port: number };

@@ -1,7 +1,8 @@
 {
-  "name": "@stellar-scaffold/ui",
+  "name": "naru",
   "version": "0.0.0",
   "private": true,
+  "description": "Naru personal money assistant workspace",
   "workspaces": [
     "app",
     "app-lib",
@@ -10,7 +11,7 @@
   ],
   "scripts": {
     "predev": "node scripts/dev-guard.mjs",
-    "dev": "pnpm --filter @stellar-scaffold/ui-react watch",
+    "dev": "pnpm --filter @naru/app watch",
     "prestart": "node scripts/dev-guard.mjs",
     "start": "pnpm --dir app watch",
     "lint": "pnpm -r --if-present run lint && oxlint app-lib e2e scripts --deny-warnings",

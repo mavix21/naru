@@ -1,5 +1,8 @@
 [workspace]
 members = ["contracts/*"]
+exclude = [
+  "contracts/guess-the-number",
+] # Local ignored test snapshots may remain after removing this example.
 resolver = "2"
 
 [workspace.package]

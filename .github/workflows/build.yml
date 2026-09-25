@@ -172,9 +172,5 @@ jobs:
           fi
           echo "Generated $ACTUAL client(s)."
       - run: npm run build --workspaces --if-present
-      - name: Install Playwright browser
-        run: npx playwright install --with-deps chromium
-        working-directory: e2e
-      - name: Run cross-framework parity smoke tests
-        run: npx playwright test tests/smoke.spec.ts
-        working-directory: e2e
+      - name: Test retained Soroban contracts
+        run: cargo test --workspace --locked

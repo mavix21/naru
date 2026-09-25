@@ -4,10 +4,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // Runs as the root `predev` and `prestart` hooks. Two jobs:
-//   1. Lifecycle gate — post-`init` the instantiated `app/` exists, so pass
-//      through and let `start` run the app (works out of the box for users).
-//      In a raw clone of the monorepo there's no single app; point the newcomer
-//      at the happy path instead of starting the wrong thing.
+//   1. Lifecycle gate — ensure the app exists before starting a watcher.
 //   2. Tool check — `start` runs `stellar scaffold watch`, so verify the
 //      required CLIs are installed and print install instructions if not.
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -84,12 +81,11 @@ const devLines =
 console.error(
   [
     "",
-    "This is the Stellar Scaffold UI monorepo, not a single app.",
+    "The Naru app/ directory is missing.",
     "",
-    "To create a new project (recommended):",
-    "  stellar scaffold init my-app",
+    "Restore the app/ directory from this repository before starting the app.",
     "",
-    "To develop a template in place (contributors) — see CONTRIBUTING.md:",
+    "Other available templates:",
     devLines,
     toolInstructions(),
     "",
