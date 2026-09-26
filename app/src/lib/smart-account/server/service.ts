@@ -1,7 +1,10 @@
 import "server-only";
 import {
   Address,
+  authorizeEntry,
   BASE_FEE,
+  hash,
+  Keypair,
   Operation,
   rpc,
   scValToBigInt,
@@ -11,6 +14,8 @@ import {
   xdr,
 } from "@stellar/stellar-sdk";
 import { randomUUID } from "node:crypto";
+
+import type { Deployment } from "../payments";
 
 import {
   TESTNET,
@@ -176,10 +181,22 @@ export class SmartAccountService {
 
     if (deployed) await this.requireAccount(account);
 
+    let balance: string | null = null;
+    let balanceError: string | null = null;
+
+    if (deployed) {
+      try {
+        balance = await this.balance(account);
+      } catch {
+        balanceError = "Balance is unavailable. Please refresh.";
+      }
+    }
+
     return {
       account,
       deployed,
-      balance: deployed ? await this.balance(account) : null,
+      balance,
+      balanceError,
       jobs,
     };
   }
@@ -237,6 +254,86 @@ export class SmartAccountService {
     );
 
     return this.submit(job, auth);
+  }
+
+  async resumeVerifiedDeployment(deployment: Deployment) {
+    const previous = this.store
+      .accountJobs(deployment.account)
+      .find((job) => job.kind === "deploy" && job.state !== "failed");
+
+    // Never replace an ambiguous signed envelope or allocate a second account.
+    if (previous && previous.state !== "review")
+      return this.reconcile(previous);
+    const func = xdr.HostFunction.fromXDR(deployment.payload.func, "base64");
+
+    const originalAuth = deployment.payload.auth.map((entry) =>
+      xdr.SorobanAuthorizationEntry.fromXDR(entry, "base64"),
+    );
+
+    validateDeployment(
+      func,
+      originalAuth,
+      deployment.account,
+      deployment.credentialId,
+      Buffer.from(deployment.publicKey, "hex"),
+      TESTNET,
+    );
+
+    // Only the kit's PUBLIC deployment signer is renewed here, never a user's
+    // passkey authorization. Ownership and the immutable constructor were
+    // already verified before this payload was persisted for the user.
+    const simulation = await server.simulateTransaction(
+      await this.transaction(func, []),
+      undefined,
+      "record",
+      true,
+    );
+
+    if (
+      !rpc.Api.isSimulationSuccess(simulation) ||
+      simulation.result?.auth?.length !== 1
+    ) {
+      throw new Error(
+        "Could not prepare the saved account for activation. Please retry.",
+      );
+    }
+
+    const deployer = Keypair.fromRawEd25519Seed(
+      hash(Buffer.from("openzeppelin-smart-account-kit")),
+    );
+
+    // RPC may record V2 credentials; keep the kit's validated V1 entry and
+    // exact invocation, renewing only the public deployer's nonce and expiry.
+    const entry = originalAuth[0];
+    const recorded = simulation.result.auth[0];
+
+    if (
+      !entry.rootInvocation().toXDR().equals(recorded.rootInvocation().toXDR())
+    ) {
+      throw new Error(
+        "The network returned a different deployment invocation.",
+      );
+    }
+
+    addressCredentials(entry).nonce(addressCredentials(recorded).nonce());
+    addressCredentials(entry).signature(xdr.ScVal.scvVoid());
+
+    const signed = await authorizeEntry(
+      entry,
+      deployer,
+      simulation.latestLedger + 60,
+      TESTNET.networkPassphrase,
+    );
+
+    return this.deploy(
+      deployment.account,
+      deployment.credentialId,
+      deployment.publicKey,
+      {
+        func: deployment.payload.func,
+        auth: [signed.toXDR("base64")],
+      },
+    );
   }
 
   async fund(account: string) {

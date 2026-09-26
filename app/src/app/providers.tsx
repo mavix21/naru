@@ -11,6 +11,10 @@ function OptionalWalletProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
 
   const withoutWallet =
+    pathname === "/" ||
+    pathname === "/create" ||
+    pathname === "/home" ||
+    pathname === "/activate" ||
     pathname === "/sign-in" ||
     pathname?.startsWith("/sign-in/") ||
     pathname === "/sign-up" ||

@@ -2,14 +2,33 @@
 
 import { SignIn, SignUp } from "@clerk/nextjs";
 
-// Keep the managed forms reusable when the product adds onboarding later.
+const appearance = {
+  elements: {
+    rootBox: "w-full max-w-100",
+    cardBox: "w-full border border-border shadow-sm",
+    card: "bg-card",
+  },
+};
+
 export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
   return (
     <div className="flex justify-center">
       {mode === "sign-in" ? (
-        <SignIn routing="path" path="/sign-in" />
+        <SignIn
+          appearance={appearance}
+          routing="path"
+          path="/sign-in"
+          forceRedirectUrl="/home"
+          signUpForceRedirectUrl="/home"
+        />
       ) : (
-        <SignUp routing="path" path="/sign-up" />
+        <SignUp
+          appearance={appearance}
+          routing="path"
+          path="/sign-up"
+          forceRedirectUrl="/home"
+          signInForceRedirectUrl="/home"
+        />
       )}
     </div>
   );

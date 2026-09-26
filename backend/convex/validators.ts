@@ -5,7 +5,7 @@ export const profileFields = {
   createdAt: v.number(),
   updatedAt: v.number(),
   preferredGreeting: v.string(),
-  onboardingStatus: v.literal("incomplete"),
+  onboardingStatus: v.union(v.literal("incomplete"), v.literal("complete")),
 };
 
 export const profileValidator = v.object({

@@ -11,6 +11,11 @@ import { Buffer } from "buffer";
 import { z } from "zod";
 
 import {
+  challengeSchema,
+  paymentStateSchema,
+  reservationSchema,
+} from "./payments";
+import {
   configSchema,
   jobSchema,
   reviewSchema,
@@ -23,15 +28,47 @@ import { validateTransferReview } from "./transfer";
 
 const errorSchema = z.object({ error: z.string() });
 
-async function request(endpoint: string, path: string, body?: string) {
+// The browser Buffer polyfill supports base64, but not Node's base64url codec.
+function decodePasskey(value: string) {
+  return Uint8Array.from(
+    Buffer.from(value.replace(/-/g, "+").replace(/_/g, "/"), "base64"),
+  );
+}
+
+function encodePasskey(value: ArrayBuffer) {
+  return Buffer.from(value)
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+}
+
+function cancelledCreation(error: Error): boolean {
+  return (
+    error.name === "NotAllowedError" ||
+    (error.cause instanceof Error && cancelledCreation(error.cause))
+  );
+}
+
+async function request(
+  endpoint: string,
+  path: string,
+  body?: string,
+  userId?: string,
+) {
+  const headers = new Headers();
+
+  if (userId) headers.set("X-Naru-User", userId);
+
   const options: RequestInit = {
     cache: "no-store",
     credentials: "same-origin",
+    headers,
   };
 
   if (body) {
     options.method = "POST";
-    options.headers = { "Content-Type": "application/json" };
+    headers.set("Content-Type", "application/json");
     options.body = body;
   }
 
@@ -55,20 +92,23 @@ export class NaruSmartAccount {
   private storage: IndexedDBStorage;
   private endpoint: string;
   private connected = false;
+  private userId?: string;
 
   private constructor(
     config: SmartAccountConfig,
     kit: SmartAccountKit,
     storage: IndexedDBStorage,
     endpoint: string,
+    userId?: string,
   ) {
     this.config = config;
     this.kit = kit;
     this.storage = storage;
     this.endpoint = endpoint;
+    this.userId = userId;
   }
 
-  static async open(endpoint: string) {
+  static async open(endpoint: string, userId?: string) {
     if (
       !window.isSecureContext ||
       !window.PublicKeyCredential ||
@@ -79,7 +119,9 @@ export class NaruSmartAccount {
       );
     }
 
-    const config = configSchema.parse(await request(endpoint, ""));
+    const config = configSchema.parse(
+      await request(endpoint, userId ? "?view=config" : "", undefined, userId),
+    );
 
     if (window.location.origin !== config.origin)
       throw new Error(
@@ -97,19 +139,28 @@ export class NaruSmartAccount {
     const { SmartAccountKit, IndexedDBStorage } =
       await import("smart-account-kit");
 
-    const storage = new IndexedDBStorage(`naru-slice1-testnet-${config.rpId}`);
+    // Product credentials never read the legacy development account database.
+    const storage = new IndexedDBStorage(
+      userId
+        ? `naru-payments-testnet-${config.rpId}-${userId}`
+        : `naru-slice1-testnet-${config.rpId}`,
+    );
 
     const kit = new SmartAccountKit({
       ...TESTNET,
       storage,
       rpId: config.rpId,
-      rpName: "Naru testnet validation",
+      rpName: "Naru",
       allowedOrigins: [config.origin],
       indexerUrl: false,
       signatureExpirationLedgers: 60,
     });
 
-    return new NaruSmartAccount(config, kit, storage, endpoint);
+    return new NaruSmartAccount(config, kit, storage, endpoint, userId);
+  }
+
+  private request(path: string, body?: string) {
+    return request(this.endpoint, path, body, this.userId);
   }
 
   async metadata(): Promise<StoredCredential | null> {
@@ -123,17 +174,166 @@ export class NaruSmartAccount {
     return credentials[0] || null;
   }
 
+  async activate(device: string, onConfirm: () => void) {
+    const reservation = reservationSchema.parse(
+      await this.request("", JSON.stringify({ action: "begin", device })),
+    );
+
+    if (reservation.linked) {
+      return paymentStateSchema.parse(
+        await this.request("", JSON.stringify({ action: "resume" })),
+      );
+    }
+
+    let metadata = await this.metadata();
+
+    if (!metadata) {
+      if (reservation.started) {
+        throw new Error(
+          "Passkey creation was interrupted. Continue in the original browser with its saved passkey; a second account will not be created.",
+        );
+      }
+
+      await this.request(
+        "",
+        JSON.stringify({
+          action: "start",
+          attempt: reservation.attempt,
+          device,
+        }),
+      );
+
+      try {
+        await this.kit.createWallet("Naru", "Naru payments", {
+          autoSubmit: false,
+          authenticatorSelection: { residentKey: "required" },
+        });
+      } catch (error) {
+        // Only a definitively cancelled ceremony can release creation. Network
+        // failures after credential storage must resume that same credential.
+        if (
+          error instanceof Error &&
+          cancelledCreation(error) &&
+          !(await this.metadata())
+        ) {
+          await this.request(
+            "",
+            JSON.stringify({
+              action: "cancel",
+              attempt: reservation.attempt,
+              device,
+            }),
+          );
+        }
+
+        throw error;
+      }
+
+      metadata = await this.metadata();
+    }
+
+    if (!metadata)
+      throw new Error("Your passkey could not be saved in this browser.");
+
+    const prepared = await this.kit.credentials.deploy(metadata.credentialId, {
+      autoSubmit: false,
+    });
+
+    if (
+      !prepared.relayerPayload ||
+      prepared.contractId !== metadata.contractId
+    ) {
+      throw new Error("Could not prepare the saved account. Please retry.");
+    }
+
+    const deployment = {
+      account: metadata.contractId,
+      credentialId: metadata.credentialId,
+      publicKey: Buffer.from(metadata.publicKey).toString("hex"),
+      payload: prepared.relayerPayload,
+    };
+
+    const { challenge } = challengeSchema.parse(
+      await this.request(
+        "",
+        JSON.stringify({
+          action: "challenge",
+          attempt: reservation.attempt,
+          device,
+          deployment,
+        }),
+      ),
+    );
+
+    onConfirm();
+
+    const credential = await navigator.credentials.get({
+      publicKey: {
+        challenge: decodePasskey(challenge),
+        rpId: this.config.rpId,
+        userVerification: "required",
+        timeout: 120_000,
+        allowCredentials: [
+          {
+            type: "public-key",
+            id: decodePasskey(metadata.credentialId),
+          },
+        ],
+      },
+    });
+
+    if (
+      !(credential instanceof PublicKeyCredential) ||
+      !(credential.response instanceof AuthenticatorAssertionResponse)
+    ) {
+      throw new Error("Passkey confirmation was cancelled. Please retry.");
+    }
+
+    const response = credential.response;
+
+    return paymentStateSchema.parse(
+      await this.request(
+        "",
+        JSON.stringify({
+          action: "verify",
+          attempt: reservation.attempt,
+          proof: {
+            credentialId: encodePasskey(credential.rawId),
+            clientDataJSON: encodePasskey(response.clientDataJSON),
+            authenticatorData: encodePasskey(response.authenticatorData),
+            signature: encodePasskey(response.signature),
+          },
+        }),
+      ),
+    );
+  }
+
   async status() {
     const metadata = await this.metadata();
 
     if (!metadata) return null;
 
-    const status = statusSchema.parse(
-      await request(
-        this.endpoint,
-        `?account=${encodeURIComponent(metadata.contractId)}`,
-      ),
-    );
+    const payment = this.userId
+      ? paymentStateSchema.parse(await this.request(""))
+      : null;
+
+    if (payment && payment.account !== metadata.contractId) {
+      throw new Error("The saved passkey does not match your payment account.");
+    }
+
+    const status = payment
+      ? {
+          account: metadata.contractId,
+          deployed: payment.state === "ready",
+          balance: payment.balance,
+          balanceError: payment.balanceError,
+          jobs: payment.job ? [payment.job] : [],
+        }
+      : statusSchema.parse(
+          await this.request(
+            `?account=${encodeURIComponent(metadata.contractId)}`,
+          ),
+        );
 
     const deployment = status.jobs.find(
       (job) => job.kind === "deploy" && job.state === "confirmed",

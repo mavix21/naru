@@ -40,6 +40,7 @@ export const statusSchema = z.object({
   account: z.string(),
   deployed: z.boolean(),
   balance: z.string().nullable(),
+  balanceError: z.string().nullable().optional(),
   jobs: z.array(jobSchema),
 });
 
