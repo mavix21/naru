@@ -120,7 +120,7 @@ export function usePayments(userId: string) {
 
   return {
     payment: query.data ?? stored ?? null,
-    loading: query.isPending && stored === undefined,
+    loading: query.isPending && !stored,
     query,
     error,
     confirming,

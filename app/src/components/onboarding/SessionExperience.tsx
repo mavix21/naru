@@ -16,7 +16,7 @@ import {
 
 import { CompanionScene } from "./CompanionScene";
 import { Frame, Heading, Notice, Scene, SceneCopy } from "./Frame";
-import { Activate, Home } from "./Home";
+import { Activate, ActivationLoading, Home } from "./Home";
 import { Customize, Welcome } from "./PublicExperience";
 
 export type Screen = "welcome" | "create" | "home" | "activate";
@@ -28,10 +28,18 @@ function Navigate({ to }: { to: string }) {
     router.replace(to);
   }, [router, to]);
 
-  return <Loading />;
+  return (
+    <Loading account={to === "/activate"} activation={to === "/activate"} />
+  );
 }
 
-function Loading({ account = false }: { account?: boolean }) {
+function Loading({
+  account = false,
+  activation = false,
+}: {
+  account?: boolean;
+  activation?: boolean;
+}) {
   const [slow, setSlow] = useState(false);
 
   useEffect(() => {
@@ -39,6 +47,8 @@ function Loading({ account = false }: { account?: boolean }) {
 
     return () => clearTimeout(timer);
   }, []);
+
+  if (activation) return <ActivationLoading account={account} slow={slow} />;
 
   return (
     <Frame controls={account ? <UserButton /> : undefined}>
@@ -75,7 +85,7 @@ function SaveCompanion() {
 
     try {
       await save({ name: draft.name, accent: draft.accent });
-      router.replace("/home");
+      router.replace("/activate");
     } catch {
       setFailed(true);
     }
@@ -136,7 +146,7 @@ function AuthenticatedExperience({
   }, [companion]);
 
   if (isLoading || !isAuthenticated || companion === undefined || !hydrated)
-    return <Loading account />;
+    return <Loading account activation={screen === "activate"} />;
 
   if (screen === "welcome") return <Navigate to="/home" />;
 
@@ -161,7 +171,12 @@ function AuthenticatedExperience({
 export function SessionExperience({ screen }: { screen: Screen }) {
   const { isLoaded, userId } = useAuth();
 
-  if (!isLoaded) return screen === "welcome" ? <Welcome /> : <Loading />;
+  if (!isLoaded)
+    return screen === "welcome" ? (
+      <Welcome />
+    ) : (
+      <Loading activation={screen === "activate"} />
+    );
 
   if (userId)
     return (

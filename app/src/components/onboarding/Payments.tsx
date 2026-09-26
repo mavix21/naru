@@ -19,14 +19,130 @@ const tones = {
   passkey: "bg-muted-foreground",
 } as const;
 
+function ActivationPaymentCard({
+  status,
+  message,
+  tone = "inactive",
+  failure,
+  transaction,
+  primary,
+  onPrimary,
+  primaryDisabled = false,
+  later,
+  onLater,
+  laterDisabled = false,
+}: {
+  status: string;
+  message: string;
+  tone?: keyof typeof tones;
+  failure?: string;
+  transaction?: string;
+  primary: string;
+  onPrimary?: () => void;
+  primaryDisabled?: boolean;
+  later: string;
+  onLater?: () => void;
+  laterDisabled?: boolean;
+}) {
+  return (
+    <Card className="h-88" aria-label="Payment activation">
+      <CardHeader>
+        <div className="flex items-center justify-between gap-3">
+          <CardTitle>
+            <span
+              className={cn(
+                "mr-2 inline-block size-2 rounded-full",
+                tones[tone],
+              )}
+              aria-hidden="true"
+            />
+            Payments
+          </CardTitle>
+          <Badge variant="outline">Testnet</Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="flex min-h-0 flex-1 flex-col justify-between">
+        <div className="min-h-0">
+          <p className="text-lg font-medium" aria-live="polite">
+            {status}
+          </p>
+          <p className="mt-2 h-12 overflow-y-auto text-sm text-muted-foreground">
+            {message}
+          </p>
+          <div className="mt-2 h-12 overflow-y-auto text-xs">
+            {failure && (
+              <p className="break-words text-destructive" role="alert">
+                {failure}
+              </p>
+            )}
+            {transaction && (
+              <a
+                className="underline underline-offset-4"
+                href={`https://stellar.expert/explorer/testnet/tx/${transaction}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                View transaction ↗
+              </a>
+            )}
+          </div>
+        </div>
+        <div className="flex flex-col gap-2">
+          <Button
+            type="button"
+            size="lg"
+            className="w-full"
+            disabled={primaryDisabled || !onPrimary}
+            onClick={onPrimary}
+          >
+            {primary}
+          </Button>
+          {later ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="w-full"
+              disabled={laterDisabled || !onLater}
+              onClick={onLater}
+            >
+              {later}
+            </Button>
+          ) : (
+            <div className="h-8" aria-hidden="true" />
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+export function ActivationPaymentsLoading({
+  slow = false,
+}: {
+  slow?: boolean;
+}) {
+  return (
+    <ActivationPaymentCard
+      status={slow ? "Still checking" : "Checking payments…"}
+      message={slow ? "Please try again." : "Checking your account."}
+      primary={slow ? "Try again" : "Checking…"}
+      onPrimary={slow ? () => window.location.reload() : undefined}
+      later="Later"
+    />
+  );
+}
+
 export function Payments({
   userId,
   onContinue,
   leaving = false,
+  leaveError,
 }: {
   userId: string;
   onContinue?: () => void;
   leaving?: boolean;
+  leaveError?: string;
 }) {
   const { payment, loading, query, error, confirming, activate } =
     usePayments(userId);
@@ -39,6 +155,95 @@ export function Payments({
   const submitted = payment?.job?.state === "pending";
   const preparing = state === "pending" && !submitted;
   const unavailable = !loading && query.isError && !payment;
+
+  if (onContinue) {
+    const ready = state === "ready" && Boolean(account);
+
+    const status = loading
+      ? "Checking payments…"
+      : unavailable
+        ? "Can’t check payments"
+        : ready
+          ? "Payments are ready"
+          : state === "pending"
+            ? submitted
+              ? "Almost there"
+              : "Preparing payments"
+            : state === "rejected"
+              ? "Let’s try again"
+              : state === "passkey"
+                ? "Finish activation"
+                : "Payments are optional";
+
+    const message = loading
+      ? "Checking your account."
+      : unavailable
+        ? "Try checking again."
+        : ready
+          ? "Your account is ready to use."
+          : state === "pending"
+            ? submitted
+              ? "Waiting for confirmation."
+              : "Your account is being prepared."
+            : state === "rejected"
+              ? "Retry whenever you’re ready."
+              : state === "passkey"
+                ? "Continue with your passkey."
+                : "Use a passkey on your device.";
+
+    const primary = leaving
+      ? "Opening home…"
+      : ready
+        ? "Go home"
+        : loading
+          ? "Checking…"
+          : unavailable
+            ? "Try again"
+            : submitted
+              ? "Check status"
+              : activate.isPending
+                ? confirming
+                  ? "Confirm on device…"
+                  : "Activating…"
+                : state === "pending" || state === "passkey"
+                  ? "Resume activation"
+                  : state === "rejected"
+                    ? "Retry activation"
+                    : "Activate payments";
+
+    return (
+      <ActivationPaymentCard
+        status={status}
+        message={message}
+        tone={loading || unavailable ? "inactive" : state}
+        failure={
+          leaveError ??
+          error ??
+          payment?.job?.error ??
+          (query.isError ? query.error.message : undefined)
+        }
+        transaction={payment?.job?.hash ?? undefined}
+        primary={primary}
+        onPrimary={
+          ready
+            ? onContinue
+            : unavailable || submitted
+              ? () => void query.refetch()
+              : loading
+                ? undefined
+                : () => activate.mutate()
+        }
+        primaryDisabled={
+          leaving ||
+          activate.isPending ||
+          (query.isFetching && (unavailable || submitted))
+        }
+        later={ready ? "" : leaving ? "Opening home…" : "Later"}
+        onLater={onContinue}
+        laterDisabled={loading || busy}
+      />
+    );
+  }
 
   const title = loading
     ? "Checking payments…"

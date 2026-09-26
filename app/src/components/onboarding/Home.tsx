@@ -1,6 +1,7 @@
 "use client";
 
 import type { Doc } from "@naru/backend/data-model";
+import type { ReactNode } from "react";
 
 import { UserButton } from "@clerk/nextjs";
 import { api } from "@naru/backend/api";
@@ -22,7 +23,7 @@ import {
   Scene,
   SceneCopy,
 } from "./Frame";
-import { Payments } from "./Payments";
+import { ActivationPaymentsLoading, Payments } from "./Payments";
 
 export function Home({
   companion,
@@ -127,6 +128,51 @@ export function Home({
   );
 }
 
+function ActivationLayout({
+  companion,
+  account = true,
+  children,
+}: {
+  companion?: Doc<"companions">;
+  account?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <Frame controls={account ? <UserButton /> : undefined}>
+      <Scene className="md:content-center">
+        {companion ? (
+          <CompanionScene name={companion.name} accent={companion.accent} />
+        ) : (
+          <div
+            aria-hidden="true"
+            className="aspect-[1/1.04] w-full max-w-65 shrink-0 rounded-[48%_48%_38%_38%] bg-muted md:aspect-[1/1.12] md:max-w-118"
+          />
+        )}
+        <SceneCopy className="motion-safe:animate-none">
+          <Eyebrow>Companion saved</Eyebrow>
+          <Heading>Ready when you are.</Heading>
+          <Description>Add a passkey for payments, or do it later.</Description>
+          {children}
+        </SceneCopy>
+      </Scene>
+    </Frame>
+  );
+}
+
+export function ActivationLoading({
+  account = false,
+  slow = false,
+}: {
+  account?: boolean;
+  slow?: boolean;
+}) {
+  return (
+    <ActivationLayout account={account}>
+      <ActivationPaymentsLoading slow={slow} />
+    </ActivationLayout>
+  );
+}
+
 export function Activate({
   companion,
   userId,
@@ -152,29 +198,15 @@ export function Activate({
   }
 
   return (
-    <Frame controls={<UserButton />}>
-      <Scene>
-        <CompanionScene name={companion.name} accent={companion.accent} />
-        <SceneCopy>
-          <Eyebrow>Companion saved</Eyebrow>
-          <Heading>
-            A safe little
-            <br />
-            place to start.
-          </Heading>
-          <Description>
-            One optional step: set up payments with a passkey on your device.
-          </Description>
-          <Payments
-            userId={userId}
-            leaving={busy}
-            onContinue={() => {
-              if (!busy) void goHome();
-            }}
-          />
-          {error && <Notice>{error}</Notice>}
-        </SceneCopy>
-      </Scene>
-    </Frame>
+    <ActivationLayout companion={companion}>
+      <Payments
+        userId={userId}
+        leaving={busy}
+        onContinue={() => {
+          if (!busy) void goHome();
+        }}
+        leaveError={error}
+      />
+    </ActivationLayout>
   );
 }
