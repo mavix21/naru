@@ -1,50 +1,130 @@
 # Naru
 
-Naru is a personal money assistant with a customizable bird companion, built
-with Next.js, Clerk, Convex, and Stellar passkey smart accounts.
+**Un pequeño compañero para compartir gastos y pagar conversando.**
 
-## Get started
+<p align="center">
+  <img src="app/public/naru.png" alt="Naru azul" width="120" />
+  <img src="app/public/naru-red.png" alt="Naru rojo" width="120" />
+  <img src="app/public/naru-yellow.png" alt="Naru amarillo" width="120" />
+</p>
 
-Use Node.js 24+, pnpm 11.25.0, Rust, the Stellar CLI, Stellar Scaffold CLI,
-and Docker. Merge settings from `app/.env.example` and `backend/.env.example`
-into the respective `.env.local` files, preserving existing values.
+[Explorar la interfaz](https://naru-app-kappa.vercel.app) ·
+[Animación azul (MP4)](app/public/naru-idle.mp4) ·
+[Animación roja (MP4)](app/public/naru-rojo-idle.mp4)
+
+## ¿Qué problema resuelve?
+
+Dividir una cena entre amigos implica coordinar mensajes, calcular cuánto debe
+cada persona y comprobar quién pagó. En cripto, además, hay que configurar una
+billetera.
+
+Naru reúne esa experiencia en una conversación con un pajarito personalizable.
+Puedes consultar tu saldo, enviar dinero y dividir gastos con amigos. La IA
+prepara la acción; tú revisas los detalles y autorizas el pago con una **passkey**
+(huella, rostro o PIN del dispositivo).
+
+## Recorrido para el jurado
+
+1. **Crea tu Naru:** elige nombre y color, y regístrate para guardarlo.
+2. **Activa los pagos:** crea una passkey y usa **Account → Add test XLM** para
+   recibir 5 XLM de prueba.
+3. **Conecta con un amigo:** en **People**, elige tu nombre de usuario, busca el
+   suyo y envía una invitación. La otra persona debe aceptarla.
+4. **Conversa:** pregunta «¿Cuál es mi saldo?» o pide «Divide 3 XLM de la cena
+   entre @ana y yo», seleccionando al amigo desde el menú de `@`. Revisa la
+   tarjeta y envía las solicitudes.
+5. **Completa el pago:** el amigo abre su solicitud, revisa el importe y confirma
+   con su passkey. El estado se actualiza y la transacción se puede consultar en
+   el explorador de Stellar.
+
+Para probar ambos lados, usa dos cuentas en perfiles de navegador distintos.
+
+**Prototipo en Stellar Testnet:** usa XLM de prueba. La demo alojada permite
+explorar la interfaz; para probar los pagos, sigue la instalación local con
+SQLite. Los videos muestran las animaciones del compañero.
+
+## ¿Cómo funciona y por qué Stellar?
+
+Stellar registra las transferencias entre cuentas inteligentes, con autorización
+mediante passkeys y comisiones cubiertas por Naru. Cada pago deja una transacción
+verificable en la red.
+
+- **Next.js, React y Tailwind CSS:** interfaz y servidor.
+- **Clerk y Convex:** acceso, amigos, conversaciones y solicitudes en tiempo real.
+- **AI SDK + Vercel AI Gateway:** interpretación de mensajes y propuestas de acción.
+- **Stellar Smart Account Kit y Soroban:** cuentas y pagos con passkeys.
+- **SQLite:** registro persistente del procesamiento de transacciones.
+
+## Ejecutar en local
+
+Necesitas **Node.js 24+**, **pnpm 11.25.0**, cuentas de desarrollo en **Clerk** y
+**Convex**, y una clave de **Vercel AI Gateway** para el chat.
+
+### 1. Instala y conecta el backend
 
 ```bash
+git clone https://github.com/mavix21/naru.git
+cd naru
 pnpm install
-pnpm dev          # Turbo: Next.js, contracts/client watcher, Convex
-pnpm build        # Next.js build and backend typecheck; no deployment
+cp -n app/.env.example app/.env.local
+pnpm --dir backend exec convex dev --configure --dev-deployment cloud --once --skip-push
 ```
 
-Start Docker before `pnpm dev`, then open http://localhost:3000.
-For Next.js only, use `pnpm --dir app dev`.
+Elige un proyecto de desarrollo en la nube. La CLI genera `backend/.env.local`.
 
-## Environment
+### 2. Configura los servicios
 
-- App auth: `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`,
-  `NEXT_PUBLIC_CONVEX_URL`. Use keys from the same Clerk Development instance
-  with its Convex integration enabled.
-- Convex CLI (`backend/.env.local`): `CONVEX_DEPLOYMENT`. Set
-  `CLERK_JWT_ISSUER_DOMAIN` on that Convex deployment.
-- Stellar overrides (local defaults): `NEXT_PUBLIC_STELLAR_NETWORK`,
-  `NEXT_PUBLIC_STELLAR_NETWORK_PASSPHRASE`, `NEXT_PUBLIC_STELLAR_RPC_URL`,
-  `NEXT_PUBLIC_STELLAR_HORIZON_URL`, `STELLAR_SCAFFOLD_ENV`, `XDG_CONFIG_HOME`.
-- Retained testnet sponsor infrastructure: `NARU_SMART_ACCOUNT_ORIGIN`,
-  `NARU_SMART_ACCOUNT_RP_ID`, `NARU_SMART_ACCOUNT_SPONSOR_SECRET`,
-  `NARU_SMART_ACCOUNT_RECIPIENT`; outside localhost development,
-  `NARU_SMART_ACCOUNT_DB`, `NARU_SMART_ACCOUNT_ENABLED`, and
-  `NARU_SMART_ACCOUNT_ACCESS_TOKEN`. Keep the existing persistent SQLite store
-  and passkey origin. Sponsorship has no public route in this checkout.
+<details>
+<summary>Variables necesarias para probar el flujo completo</summary>
 
-## Checks
+En Clerk, crea una aplicación **Development** y activa la
+[integración con Convex](https://docs.convex.dev/auth/clerk).
+Completa `app/.env.local` con:
+
+- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` y `CLERK_SECRET_KEY`: claves `pk_test_…` y
+  `sk_test_…` de la misma aplicación Clerk.
+- `NEXT_PUBLIC_CONVEX_URL`: URL `https://….convex.cloud` del backend elegido.
+- `AI_GATEWAY_API_KEY`: clave de Vercel AI Gateway.
+- `NARU_PAYMENTS_KEY`: secreto aleatorio de al menos 32 caracteres.
+- `NARU_SMART_ACCOUNT_SPONSOR_SECRET`: clave `S…` de una cuenta Testnet financiada
+  para cubrir comisiones y saldo de prueba.
+- `NARU_SMART_ACCOUNT_RECIPIENT`: dirección `G…` de una segunda cuenta Testnet
+  financiada, requerida por la configuración.
+
+En el dashboard de **Convex → Settings → Environment Variables**, configura
+`NARU_PAYMENTS_KEY` con el mismo valor y `CLERK_JWT_ISSUER_DOMAIN` con la URL de
+Clerk `https://tu-instancia.clerk.accounts.dev`, sin barra final.
+
+Puedes crear las dos cuentas Testnet y financiarlas con Friendbot desde
+[Stellar Lab](https://lab.stellar.org). Conserva los valores locales de
+`NARU_SMART_ACCOUNT_ORIGIN` (`http://localhost:3000`) y
+`NARU_SMART_ACCOUNT_RP_ID` (`localhost`). SQLite se crea en
+`app/.naru-smart-account.sqlite`.
+
+Más opciones en [app/.env.example](app/.env.example) y
+[backend/.env.example](backend/.env.example).
+
+</details>
+
+### 3. Inicia la aplicación
 
 ```bash
-pnpm lint
-pnpm format:check
-pnpm typecheck
-pnpm build
+# Terminal 1, desde la raíz del repositorio
+pnpm --dir backend dev
+
+# Terminal 2, desde la raíz del repositorio
+pnpm --dir app dev
 ```
 
-Tooling and example contracts derive from
-[Stellar Scaffold](https://github.com/stellar-scaffold/cli); passkey integration
-uses [Stellar Smart Account Kit](https://github.com/stellar/smart-account-kit).
-See `LICENSE` and retained upstream attribution notices.
+Abre **http://localhost:3000** con un navegador compatible con passkeys. Los pagos
+usan Testnet y el backend de Convex está en la nube.
+
+Para desarrollar también los contratos del workspace, instala Rust, Stellar CLI
+y Stellar Scaffold CLI, inicia Docker y usa `pnpm dev` desde la raíz.
+Comprobaciones disponibles: `pnpm lint`, `pnpm typecheck` y `pnpm build`.
+
+---
+
+[Licencia Apache-2.0](LICENSE). Basado en
+[Stellar Scaffold](https://github.com/stellar-scaffold/cli) y
+[Stellar Smart Account Kit](https://github.com/stellar/smart-account-kit).
