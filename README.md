@@ -9,8 +9,8 @@
 </p>
 
 [Explorar la interfaz](https://naru-app-kappa.vercel.app) ·
-[Animación azul (MP4)](app/public/naru-idle.mp4) ·
-[Animación roja (MP4)](app/public/naru-rojo-idle.mp4)
+[Video pitch](https://youtu.be/3jpPjH41-b4?si=T9mQOICz7EKsTd2F) ·
+[Video demo](https://youtu.be/T3Sl3tSe1pg?si=eWVtPePxf22GjoBg)
 
 ## ¿Qué problema resuelve?
 
@@ -41,7 +41,7 @@ Para probar ambos lados, usa dos cuentas en perfiles de navegador distintos.
 
 **Prototipo en Stellar Testnet:** usa XLM de prueba. La demo alojada permite
 explorar la interfaz; para probar los pagos, sigue la instalación local con
-SQLite. Los videos muestran las animaciones del compañero.
+SQLite.
 
 ## ¿Cómo funciona y por qué Stellar?
 
