@@ -3,45 +3,7 @@
 import { useMemo, useSyncExternalStore } from "react";
 import { z } from "zod";
 
-export type Accent = "sky" | "coral" | "sunshine";
-
-type AccentOption = {
-  id: Accent;
-  label: string;
-  swatch: string;
-  surface: string;
-  image: string;
-  video?: string;
-};
-
-export const accents: readonly AccentOption[] = [
-  {
-    id: "sky",
-    label: "Sky",
-    swatch: "bg-companion-sky",
-    surface: "bg-companion-sky-surface",
-    image: "/naru.png",
-    // Artwork variants only: the same bird animation, not a recolor filter.
-    video: "/naru-idle.mp4",
-  },
-  {
-    id: "coral",
-    label: "Coral",
-    swatch: "bg-companion-coral",
-    surface: "bg-companion-coral-surface",
-    image: "/naru-red.png",
-    video: "/naru-rojo-idle.mp4",
-  },
-  {
-    id: "sunshine",
-    label: "Sunshine",
-    swatch: "bg-companion-sunshine",
-    surface: "bg-companion-sunshine-surface",
-    image: "/naru-yellow.png",
-  },
-];
-
-export type CompanionSettings = { name: string; accent: Accent };
+export { accents, type Accent, type CompanionSettings } from "./companion-art";
 
 const draftSchema = z.object({
   name: z.string().max(32),

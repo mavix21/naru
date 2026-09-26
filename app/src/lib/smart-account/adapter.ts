@@ -10,6 +10,8 @@ import { xdr } from "@stellar/stellar-sdk";
 import { Buffer } from "buffer";
 import { z } from "zod";
 
+import { parseAmount } from "@/lib/money";
+
 import {
   challengeSchema,
   paymentStateSchema,
@@ -520,6 +522,51 @@ export class NaruSmartAccount {
         }),
       ),
     );
+  }
+
+  // Product authorization signs only the immutable, server-stored operation
+  // currently shown by the card. Submission remains a separate trusted request.
+  async signTransfer(
+    review: TransferReview,
+    expected: {
+      account: string;
+      recipient: string;
+      token: string;
+      amount: string;
+      units: string;
+    },
+  ) {
+    const account = await this.account();
+
+    if (
+      account !== expected.account ||
+      review.account !== account ||
+      review.recipient !== expected.recipient ||
+      review.token !== expected.token ||
+      review.token !== this.config.token ||
+      review.amount !== expected.amount ||
+      parseAmount(review.amount).units !== expected.units ||
+      review.expiresAt <= Date.now()
+    )
+      throw new Error(
+        "Transfer review expired or changed. Read the card again.",
+      );
+    const entry = xdr.SorobanAuthorizationEntry.fromXDR(review.auth, "base64");
+    validateTransferReview(
+      entry,
+      account,
+      expected.recipient,
+      expected.token,
+      review.expiration,
+      expected.units,
+    );
+
+    const signed = await this.kit.signAuthEntry(entry, {
+      expiration: review.expiration,
+      contextRuleIds: [0],
+    });
+
+    return signed.toXDR("base64");
   }
 }
 

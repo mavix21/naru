@@ -15,6 +15,8 @@ import {
 } from "@stellar/stellar-sdk";
 import { randomUUID } from "node:crypto";
 
+import { parseAmount } from "@/lib/money";
+
 import type { Deployment } from "../payments";
 
 import {
@@ -371,18 +373,22 @@ export class SmartAccountService {
     return this.submit(job, auth);
   }
 
-  async review(account: string): Promise<TransferReview> {
+  async review(
+    account: string,
+    transfer = { recipient: this.config.publicConfig.recipient, amount: "0.1" },
+  ): Promise<TransferReview> {
     this.store.rate(`review:${new Date().toISOString().slice(0, 10)}`, 100);
     await this.requireAccount(account);
+    const { units, amount } = parseAmount(transfer.amount);
 
-    if (BigInt(await this.balance(account)) < BigInt(1_000_000))
+    if (BigInt(await this.balance(account)) < BigInt(units))
       throw new Error("Insufficient test XLM. Fund the account first.");
 
     const func = transferFunction(
       this.config.publicConfig.token,
       account,
-      this.config.publicConfig.recipient,
-      BigInt(1_000_000),
+      transfer.recipient,
+      BigInt(units),
     );
 
     const simulation = await server.simulateTransaction(
@@ -412,7 +418,7 @@ export class SmartAccountService {
         .toXDR()
         .equals(func.invokeContract().toXDR())
     ) {
-      throw new Error("Simulation did not match the fixed transfer.");
+      throw new Error("Simulation did not match the reviewed transfer.");
     }
 
     const expiration = simulation.latestLedger + 60;
@@ -433,9 +439,9 @@ export class SmartAccountService {
     return {
       id,
       account,
-      recipient: this.config.publicConfig.recipient,
+      recipient: transfer.recipient,
       token: this.config.publicConfig.token,
-      amount: "0.1",
+      amount,
       auth,
       expiration,
       expiresAt,

@@ -8,7 +8,10 @@
  * @module
  */
 
+import type * as access from "../access.js";
 import type * as companions from "../companions.js";
+import type * as conversations from "../conversations.js";
+import type * as operations from "../operations.js";
 import type * as payments from "../payments.js";
 import type * as profiles from "../profiles.js";
 import type * as validators from "../validators.js";
@@ -20,7 +23,10 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  access: typeof access;
   companions: typeof companions;
+  conversations: typeof conversations;
+  operations: typeof operations;
   payments: typeof payments;
   profiles: typeof profiles;
   validators: typeof validators;

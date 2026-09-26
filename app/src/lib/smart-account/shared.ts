@@ -51,7 +51,7 @@ export const reviewSchema = z.object({
   account: z.string(),
   recipient: z.string(),
   token: z.string(),
-  amount: z.literal("0.1"),
+  amount: z.string().regex(/^(0|[1-9]\d*)(\.\d{1,7})?$/),
   auth: z.string(),
   expiration: z.number(),
   expiresAt: z.number(),

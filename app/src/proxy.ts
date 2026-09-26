@@ -27,6 +27,8 @@ export const config = {
     "/home",
     "/activate",
     "/api/payments",
+    "/api/chat",
+    "/api/transfers",
     "/sign-in/:path*",
     "/sign-up/:path*",
   ],

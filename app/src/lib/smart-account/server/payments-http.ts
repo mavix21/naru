@@ -12,7 +12,7 @@ import {
   passkeyProofSchema,
   type PaymentState,
 } from "../payments";
-import { TESTNET } from "../shared";
+import { TESTNET, jobSchema } from "../shared";
 import { verifyPasskeyProof } from "./passkey-proof";
 import { validateDeployment } from "./policy";
 import { SmartAccountService } from "./service";
@@ -37,6 +37,7 @@ const inputSchema = z.discriminatedUnion("action", [
     .object({ action: z.literal("verify"), attempt, proof: passkeyProofSchema })
     .strict(),
   z.object({ action: z.literal("resume") }).strict(),
+  z.object({ action: z.literal("fund") }).strict(),
 ]);
 
 type Enrollment = FunctionReturnType<typeof api.payments.enrollment>;
@@ -143,7 +144,7 @@ async function readBody(request: Request) {
   return inputSchema.parse(JSON.parse(Buffer.concat(chunks).toString("utf8")));
 }
 
-async function status(
+export async function readPaymentStatus(
   service: SmartAccountService,
   token: string,
   current: Enrollment | null,
@@ -192,7 +193,7 @@ async function resume(
   const deployment = deploymentSchema.parse(JSON.parse(enrollment.deployment));
   await service.resumeVerifiedDeployment(deployment);
 
-  return status(service, token, enrollment);
+  return readPaymentStatus(service, token, enrollment);
 }
 
 async function handle(request: Request) {
@@ -273,11 +274,20 @@ async function handle(request: Request) {
     );
 
     if (request.method === "GET") {
-      return json(
-        new URL(request.url).searchParams.get("view") === "config"
-          ? await service.ready()
-          : await status(service, token, null),
-      );
+      if (new URL(request.url).searchParams.get("view") === "config")
+        return json(await service.ready());
+      const payment = await readPaymentStatus(service, token, null);
+
+      const funding = payment.account
+        ? service.store
+            .accountJobs(payment.account)
+            .find((job) => job.kind === "fund")
+        : null;
+
+      return json({
+        ...payment,
+        funding: funding ? jobSchema.parse(funding) : null,
+      });
     }
 
     const body = await readBody(request);
@@ -382,6 +392,17 @@ async function handle(request: Request) {
 
       case "resume":
         return json(await resume(service, token, null));
+      case "fund": {
+        const enrollment = await getEnrollment(token);
+
+        if (!enrollment?.account) throw new Error("Activate payments first.");
+        const funding = await service.fund(enrollment.account);
+
+        return json({
+          ...(await readPaymentStatus(service, token, enrollment)),
+          funding,
+        });
+      }
     }
   } catch (error) {
     return json(

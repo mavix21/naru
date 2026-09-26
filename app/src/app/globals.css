@@ -133,3 +133,22 @@
     @apply font-sans;
   }
 }
+
+@keyframes naru-confirmed {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0);
+  }
+  35% {
+    transform: translateY(-4px) rotate(-5deg);
+  }
+  70% {
+    transform: translateY(-1px) rotate(3deg);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .naru-presence[data-delight="true"] {
+    animation: naru-confirmed 900ms ease-in-out;
+  }
+}

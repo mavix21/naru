@@ -7,6 +7,7 @@ export function validateTransferReview(
   recipient: string,
   token: string,
   expiration: number,
+  units = "1000000",
 ) {
   if (entry.credentials().switch().name !== "sorobanCredentialsAddressV2") {
     throw new Error("Expected Protocol 27+ smart-account authorization.");
@@ -20,7 +21,7 @@ export function validateTransferReview(
     args: [
       Address.fromString(account).toScVal(),
       Address.fromString(recipient).toScVal(),
-      nativeToScVal(BigInt(1_000_000), { type: "i128" }),
+      nativeToScVal(BigInt(units), { type: "i128" }),
     ],
   });
 

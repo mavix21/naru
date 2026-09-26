@@ -1,8 +1,6 @@
-"use client";
-
 import Image from "next/image";
 
-import { accents, type CompanionSettings } from "@/lib/companion";
+import { accents, type CompanionSettings } from "@/lib/companion-art";
 import { cn } from "@/lib/utils";
 
 export function CompanionScene({

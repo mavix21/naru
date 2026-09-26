@@ -10,14 +10,21 @@ export function Frame({
   children,
   controls,
   back,
+  className,
 }: {
   children: ReactNode;
   controls?: ReactNode;
   back?: string;
+  className?: string;
 }) {
   return (
-    <div className="mx-auto flex min-h-dvh max-w-7xl flex-col px-6 text-foreground md:px-9 lg:px-16 motion-reduce:**:animate-none motion-reduce:**:transition-none">
-      <header className="flex min-h-20 items-center justify-between gap-6 md:min-h-28">
+    <div
+      className={cn(
+        "mx-auto flex min-h-dvh max-w-7xl flex-col px-6 text-foreground md:px-9 lg:px-16 motion-reduce:**:animate-none motion-reduce:**:transition-none",
+        className,
+      )}
+    >
+      <header className="flex min-h-20 shrink-0 items-center justify-between gap-6 md:min-h-28">
         <Link
           href="/"
           className="rounded-sm text-[33px] leading-none font-semibold tracking-[-2px] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
