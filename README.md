@@ -1,6 +1,8 @@
 # Naru
 
-**Un pequeño compañero para compartir gastos y pagar conversando.**
+**Naru es tu compañero financiero con IA: un agente personalizable diseñado para
+ayudarte a ganar, mover y organizar tu dinero, y coordinarse con los Narus de
+otras personas.**
 
 <p align="center">
   <img src="app/public/naru.png" alt="Naru azul" width="120" />
@@ -14,40 +16,65 @@
 
 ## ¿Qué problema resuelve?
 
-Dividir una cena entre amigos implica coordinar mensajes, calcular cuánto debe
-cada persona y comprobar quién pagó. En cripto, además, hay que configurar una
-billetera.
+Las personas piensan en objetivos: cobrar por su trabajo, organizar sus gastos,
+ahorrar para algo importante o encontrar nuevas formas de generar ingresos.
+Convertir esos objetivos en resultados exige navegar entre aplicaciones, hacer
+cálculos, coordinar con otras personas y dar seguimiento manualmente. Esa carga
+consume tiempo y deja oportunidades, pagos y decisiones pendientes.
 
-Naru reúne esa experiencia en una conversación con un pajarito personalizable.
-Puedes consultar tu saldo, enviar dinero y dividir gastos con amigos. La IA
-prepara la acción; tú revisas los detalles y autorizas el pago con una **passkey**
-(huella, rostro o PIN del dispositivo).
+**Naru busca que cualquier persona pueda delegar gestiones financieras en un
+compañero que conozca su contexto y pueda actuar con su autorización.** Desde una
+conversación, el usuario expresa lo que necesita; Naru prepara las acciones,
+solicita las confirmaciones necesarias y mantiene el seguimiento. Su identidad
+personalizable hace que esa relación tenga continuidad y resulte cercana,
+incluso para quienes nunca han utilizado un agente o una wallet.
 
-## Recorrido para el jurado
+La dimensión social amplía esa propuesta: tu Naru puede comunicarse con los de
+otras personas para coordinar pagos, llevar solicitudes y gestionar acuerdos,
+sin exponer conversaciones privadas ni decidir por sus usuarios. Enviar dinero
+y dividir gastos son los primeros casos de uso de una visión más amplia:
+**un compañero que te ayude a conseguir ingresos, administrar lo que recibes y
+cumplir objetivos con tu dinero.**
+
+## ¿Cómo usa Stellar?
+
+**Stellar es la infraestructura que permite a Naru ejecutar movimientos de dinero
+autorizados por el usuario.** La aplicación integra cuentas inteligentes
+(smart accounts) en Soroban controladas mediante **passkeys** (huella, rostro o
+PIN del dispositivo), sin exigir conectar una wallet externa ni gestionar una
+frase semilla. La plataforma patrocina las comisiones de red para que el usuario
+pueda concentrarse en la acción que quiere realizar.
+
+Los agentes preparan y coordinan las operaciones; el usuario autoriza el
+movimiento y Stellar registra su ejecución. La confirmación de la transacción
+permite actualizar el estado del pago en las conversaciones de los participantes.
+
+Esta infraestructura sirve como base para ampliar Naru hacia cobros por
+servicios, tareas remuneradas y acuerdos de pago programables entre usuarios y
+sus agentes. **El prototipo actual valida la creación de cuentas, el fondeo y
+las transferencias en Stellar Testnet con activos de prueba; las capacidades
+adicionales forman parte de la visión del producto.**
+
+## Prototipo: recorrido para el jurado
 
 1. **Crea tu Naru:** elige nombre y color, y regístrate para guardarlo.
 2. **Activa los pagos:** crea una passkey y usa **Account → Add test XLM** para
    recibir 5 XLM de prueba.
-3. **Conecta con un amigo:** en **People**, elige tu nombre de usuario, busca el
-   suyo y envía una invitación. La otra persona debe aceptarla.
-4. **Conversa:** pregunta «¿Cuál es mi saldo?» o pide «Divide 3 XLM de la cena
-   entre @ana y yo», seleccionando al amigo desde el menú de `@`. Revisa la
-   tarjeta y envía las solicitudes.
-5. **Completa el pago:** el amigo abre su solicitud, revisa el importe y confirma
-   con su passkey. El estado se actualiza y la transacción se puede consultar en
-   el explorador de Stellar.
+3. **Conecta con otra persona:** en **People**, elige tu nombre de usuario,
+   busca el suyo y envía una invitación. La otra persona debe aceptarla.
+4. **Conversa:** consulta tu saldo, pide «Envía 1 XLM a @ana» o prepara un gasto
+   compartido. Selecciona a la persona desde el menú de `@`.
+5. **Autoriza y sigue el resultado:** revisa la tarjeta y confirma el pago con
+   tu passkey. El estado se actualiza y puedes consultar la transacción en el
+   explorador de Stellar. Las solicitudes de gastos compartidos llegan al otro
+   participante para que pueda responder o pagar.
 
 Para probar ambos lados, usa dos cuentas en perfiles de navegador distintos.
 
-**Prototipo en Stellar Testnet:** usa XLM de prueba. La demo alojada permite
-explorar la interfaz; para probar los pagos, sigue la instalación local con
-SQLite.
+La demo alojada permite explorar la interfaz; para probar los pagos, sigue la
+instalación local con SQLite.
 
-## ¿Cómo funciona y por qué Stellar?
-
-Stellar registra las transferencias entre cuentas inteligentes, con autorización
-mediante passkeys y comisiones cubiertas por Naru. Cada pago deja una transacción
-verificable en la red.
+## Tecnología
 
 - **Next.js, React y Tailwind CSS:** interfaz y servidor.
 - **Clerk y Convex:** acceso, amigos, conversaciones y solicitudes en tiempo real.
