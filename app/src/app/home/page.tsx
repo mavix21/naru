@@ -1,5 +1,3 @@
-import type { ReactNode } from "react";
-
 import { UserButton } from "@clerk/nextjs";
 import { api } from "@naru/backend/api";
 import { fetchQuery, preloadQuery } from "convex/nextjs";
@@ -12,6 +10,7 @@ import { Suspense } from "react";
 import { AccountPanel } from "@/components/conversation/AccountPanel";
 import { CompanionSettings } from "@/components/conversation/CompanionSettings";
 import { Conversation } from "@/components/conversation/Conversation";
+import { HomeMenu } from "@/components/conversation/HomeMenu";
 import { RecentOperations } from "@/components/conversation/RecentOperations";
 import { CompanionScene } from "@/components/onboarding/CompanionScene";
 import { ExperiencePage } from "@/components/onboarding/ExperiencePage";
@@ -19,19 +18,6 @@ import { Frame } from "@/components/onboarding/Frame";
 import { getAuthConfig } from "@/lib/auth/config";
 import { sessionIdentity } from "@/lib/auth/server";
 import { accents } from "@/lib/companion-art";
-
-function HomeMenu({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <details name="home-menu" className="group">
-      <summary className="cursor-pointer list-none rounded-md py-2 text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring group-open:text-foreground">
-        {label}
-      </summary>
-      <div className="absolute top-18 right-0 left-0 z-30 max-h-[min(70dvh,680px)] overflow-y-auto rounded-3xl border bg-background p-5 shadow-xl shadow-black/5 md:top-24 md:left-auto md:w-96 md:p-6">
-        {children}
-      </div>
-    </details>
-  );
-}
 
 export default function Page() {
   if (!getAuthConfig()) return <ExperiencePage screen="home" />;
