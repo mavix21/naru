@@ -460,6 +460,57 @@ export class SmartAccountService {
     return this.submit(job, [auth]);
   }
 
+  assertTransfer(
+    job: RecordEntry,
+    expected: {
+      account: string;
+      recipient: string;
+      token: string;
+      units: string;
+    },
+  ) {
+    const func = transferFunction(
+      expected.token,
+      expected.account,
+      expected.recipient,
+      BigInt(expected.units),
+    );
+
+    if (
+      expected.token !== this.config.publicConfig.token ||
+      job.kind !== "transfer" ||
+      job.account !== expected.account ||
+      job.func !== func.toXDR("base64")
+    )
+      throw new Error(
+        "Transaction intent does not match the exact saved payment.",
+      );
+
+    if (job.envelope) {
+      const transaction = TransactionBuilder.fromXDR(
+        job.envelope,
+        TESTNET.networkPassphrase,
+      );
+
+      if (
+        !(transaction instanceof Transaction) ||
+        transaction.hash().toString("hex") !== job.hash ||
+        transaction.operations.length !== 1
+      )
+        throw new Error("Transaction evidence does not match this payment.");
+      const operation = transaction.operations[0];
+
+      if (
+        operation.type !== "invokeHostFunction" ||
+        !operation.func.toXDR().equals(func.toXDR())
+      )
+        throw new Error(
+          "Confirmed invocation does not match the requested transfer.",
+        );
+    } else if (job.state === "confirmed")
+      throw new Error("Confirmed envelope missing.");
+  }
+
   async submit(
     job: RecordEntry,
     auth: xdr.SorobanAuthorizationEntry[],
@@ -545,6 +596,18 @@ export class SmartAccountService {
     const result = await server.getTransaction(job.hash);
 
     if (result.status === "SUCCESS") {
+      const confirmed = TransactionBuilder.fromXDR(
+        result.envelopeXdr,
+        TESTNET.networkPassphrase,
+      );
+
+      if (
+        confirmed.hash().toString("hex") !== job.hash ||
+        confirmed.toXDR() !== job.envelope
+      )
+        throw new Error(
+          "RPC confirmation did not match the persisted signed transaction.",
+        );
       this.store.finish(job.id, "confirmed", result.ledger, null);
     } else if (result.status === "FAILED") {
       this.store.finish(

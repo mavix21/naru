@@ -5,6 +5,7 @@
   "description": "Naru Convex backend and client-safe generated references",
   "type": "module",
   "exports": {
+    "./money": "./convex/money.ts",
     "./api": "./convex/_generated/api.js",
     "./data-model": {
       "types": "./convex/_generated/dataModel.d.ts"

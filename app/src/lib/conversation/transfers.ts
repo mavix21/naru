@@ -8,8 +8,6 @@ import { serverKey } from "@/lib/auth/server";
 import { parseAmount } from "@/lib/money";
 import { SmartAccountService } from "@/lib/smart-account/server/service";
 
-import { resolveRecipient } from "./recipients";
-
 export async function validateOperation(
   operation: Doc<"operations">,
   token: string,
@@ -17,13 +15,28 @@ export async function validateOperation(
 ) {
   const [sender, recipient] = await Promise.all([
     fetchQuery(api.payments.current, {}, { token }),
-    resolveRecipient(operation.recipientEmail, token),
+    operation.recipientProfileId
+      ? fetchQuery(
+          api.operations.friendRecipient,
+          { key: serverKey(), id: operation.recipientProfileId },
+          { token },
+        )
+      : fetchQuery(
+          api.operations.recipient,
+          { key: serverKey(), user: operation.recipientUserId },
+          { token },
+        ).then((recipient) =>
+          recipient
+            ? { ...recipient, userId: operation.recipientUserId }
+            : null,
+        ),
   ]);
 
   if (sender?.state !== "ready" || sender.account !== operation.account)
     throw new Error("Activate your Naru payment account to continue.");
 
   if (
+    !recipient ||
     recipient.userId !== operation.recipientUserId ||
     recipient.account !== operation.recipient
   )
@@ -37,6 +50,29 @@ export async function validateOperation(
     parseAmount(operation.amount).units !== operation.units
   )
     throw new Error("The asset or amount does not match the saved operation.");
+
+  if (operation.requestId) {
+    const { request, split, isOrganizer } = await fetchQuery(
+      api.splits.request,
+      { id: operation.requestId },
+      { token },
+    );
+
+    if (
+      isOrganizer ||
+      request.operationId !== operation._id ||
+      request.state !== "outstanding" ||
+      request.amount !== operation.amount ||
+      request.units !== operation.units ||
+      split.organizerAccount !== operation.recipient ||
+      split.token !== operation.token ||
+      split.organizer.userId !== operation.recipientProfileId
+    )
+      throw new Error(
+        "The payment must match the current, full outstanding request.",
+      );
+  }
+
   await Promise.all([
     service.requireAccount(operation.account),
     service.requireAccount(operation.recipient),
@@ -57,6 +93,7 @@ export async function reconcileOperation(
   let record = service.store.get(operation.reviewId);
 
   if (!record || record.account !== operation.account) return;
+  service.assertTransfer(record, operation);
 
   // A crash between the Convex claim and the local claim cannot be resubmitted
   // by rendering. Only an expired, never-claimed review is a definitive failure.
@@ -71,6 +108,12 @@ export async function reconcileOperation(
   }
 
   const job = await service.reconcile(record);
+
+  if (job.state === "confirmed") {
+    if (!job.hash || !job.ledger)
+      throw new Error("Missing confirmed transaction evidence.");
+    service.assertTransfer(service.store.get(record.id)!, operation);
+  }
 
   const error =
     job.state === "preparing" && record.created < Date.now() - 300_000

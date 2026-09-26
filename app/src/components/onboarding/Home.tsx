@@ -190,7 +190,16 @@ export function Activate({
 
     try {
       await finish({});
-      router.replace("/home");
+
+      const returnTo = new URLSearchParams(window.location.search).get(
+        "returnTo",
+      );
+
+      router.replace(
+        returnTo && /^\/home\?(request|split)=[a-z0-9]{20,40}$/.test(returnTo)
+          ? returnTo
+          : "/home",
+      );
     } catch {
       setError("Couldn’t save your choice. Please try again.");
       setBusy(false);

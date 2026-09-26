@@ -2,6 +2,8 @@ import { ConvexError, v } from "convex/values";
 
 import { mutation, query, type QueryCtx } from "./_generated/server";
 import { requireServer, requireUser } from "./access";
+import { validateMentions } from "./socialShared";
+import { mentionValidator } from "./validators";
 
 function find(ctx: QueryCtx, user: string) {
   return ctx.db
@@ -9,6 +11,24 @@ function find(ctx: QueryCtx, user: string) {
     .withIndex("by_clerk_user", (q) => q.eq("clerkUserId", user))
     .unique();
 }
+
+export const event = query({
+  args: { messageId: v.string() },
+  handler: async (ctx, { messageId }) => {
+    const conversation = await find(ctx, await requireUser(ctx));
+
+    if (!conversation) return null;
+
+    const message = await ctx.db
+      .query("messages")
+      .withIndex("by_message", (q) =>
+        q.eq("conversationId", conversation._id).eq("messageId", messageId),
+      )
+      .unique();
+
+    return message?.event ?? null;
+  },
+});
 
 // A private, reactive snapshot. Never shared-cache account or conversation data.
 export const current = query({
@@ -57,10 +77,16 @@ export const current = query({
 });
 
 export const begin = mutation({
-  args: { key: v.string(), messageId: v.string(), text: v.string() },
+  args: {
+    key: v.string(),
+    messageId: v.string(),
+    text: v.string(),
+    mentions: v.optional(v.array(mentionValidator)),
+  },
   handler: async (ctx, args) => {
     requireServer(args.key);
     const user = await requireUser(ctx);
+    await validateMentions(ctx, user, args.text, args.mentions ?? []);
 
     if (
       !/^[\w-]{1,100}$/.test(args.messageId) ||
@@ -120,14 +146,17 @@ export const begin = mutation({
       messageId: args.messageId,
       sequence: conversation.sequence + 1,
       role: "user",
+      mentions: args.mentions ?? [],
       content: JSON.stringify({
         id: args.messageId,
         role: "user",
-        parts: [{ type: "text", text: args.text.trim() }],
+        parts: [{ type: "text", text: args.text }],
+        metadata: { mentions: args.mentions ?? [] },
       }),
     });
     await ctx.db.patch(conversation._id, {
       sequence: conversation.sequence + 2,
+      replySequence: conversation.sequence + 2,
       activeTurn: args.messageId,
       activeUntil: Date.now() + 150_000,
       error: null,
@@ -159,7 +188,7 @@ export const finish = mutation({
       await ctx.db.insert("messages", {
         conversationId: conversation._id,
         messageId: args.responseId,
-        sequence: conversation.sequence,
+        sequence: conversation.replySequence ?? conversation.sequence,
         role: "assistant",
         content: args.content,
       });

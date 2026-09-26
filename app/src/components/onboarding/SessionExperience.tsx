@@ -6,6 +6,7 @@ import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { UsernameForm } from "@/components/social/UsernameForm";
 import { Button } from "@/components/ui/button";
 import {
   clearDraft,
@@ -138,6 +139,8 @@ function AuthenticatedExperience({
     isAuthenticated ? {} : "skip",
   );
 
+  const profile = useQuery(api.profiles.current, isAuthenticated ? {} : "skip");
+
   const draft = useCompanionDraft();
   const hydrated = useHydrated();
 
@@ -145,7 +148,13 @@ function AuthenticatedExperience({
     if (companion) clearDraft();
   }, [companion]);
 
-  if (isLoading || !isAuthenticated || companion === undefined || !hydrated)
+  if (
+    isLoading ||
+    !isAuthenticated ||
+    companion === undefined ||
+    profile === undefined ||
+    !hydrated
+  )
     return <Loading account activation={screen === "activate"} />;
 
   if (screen === "welcome") return <Navigate to="/home" />;
@@ -159,6 +168,18 @@ function AuthenticatedExperience({
   }
 
   if (screen === "create") return <Navigate to="/home" />;
+
+  if (!companion.paymentChoiceMade && !profile?.username)
+    return (
+      <Frame controls={<UserButton />}>
+        <Scene>
+          <CompanionScene name={companion.name} accent={companion.accent} />
+          <SceneCopy>
+            <UsernameForm />
+          </SceneCopy>
+        </Scene>
+      </Frame>
+    );
 
   if (screen === "activate")
     return <Activate companion={companion} userId={userId} />;

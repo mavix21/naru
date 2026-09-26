@@ -141,13 +141,14 @@ export function TransferCard({
 
   return (
     <article
-      aria-label={`Transfer to ${operation.recipientEmail}`}
+      aria-label={`Transfer to ${operation.recipientName}`}
       className="my-5 overflow-hidden rounded-3xl border border-border/80 bg-card shadow-xs"
     >
       <div className="p-5 md:p-6">
         <div className="mb-5 flex items-center justify-between gap-3 text-[10px] font-medium tracking-wider uppercase text-muted-foreground">
           <span>
-            Sending money <span aria-hidden="true">↗</span>
+            {operation.requestId ? "Paying your share" : "Sending money"}{" "}
+            <span aria-hidden="true">↗</span>
           </span>
           <span className="rounded-full border px-2.5 py-1 tracking-normal normal-case">
             Stellar testnet
@@ -163,11 +164,15 @@ export function TransferCard({
           To <span className="font-medium">{operation.recipientName}</span>
         </p>
         <p className="mt-1 break-all text-xs text-muted-foreground">
-          {operation.recipientEmail}
+          {operation.recipientUsername
+            ? `@${operation.recipientUsername}`
+            : operation.recipientEmail}
         </p>
         <p className="mt-2 text-[11px] text-muted-foreground">
-          <span aria-hidden="true">✓ </span>Verified email · registered Naru
-          account
+          <span aria-hidden="true">✓ </span>
+          {operation.recipientProfileId
+            ? "Accepted friend · verified associated Naru account"
+            : "Verified registered Naru account"}
         </p>
         <details className="mt-4 text-[11px] text-muted-foreground">
           <summary className="cursor-pointer">Account & sponsorship</summary>
@@ -305,18 +310,20 @@ export function TransferCard({
               >
                 Confirm with passkey
               </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                disabled={!!busy}
-                onClick={() => {
-                  setAmount(operation.amount);
-                  setEditing(true);
-                }}
-              >
-                Edit
-              </Button>
+              {!operation.requestId && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={!!busy}
+                  onClick={() => {
+                    setAmount(operation.amount);
+                    setEditing(true);
+                  }}
+                >
+                  Edit
+                </Button>
+              )}
               <Button
                 type="button"
                 variant="ghost"
@@ -324,7 +331,7 @@ export function TransferCard({
                 disabled={!!busy}
                 onClick={() => void action("cancel")}
               >
-                Cancel
+                {operation.requestId ? "Close payment review" : "Cancel"}
               </Button>
             </div>
           )}

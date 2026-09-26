@@ -18,8 +18,16 @@ import {
 } from "react";
 import { z } from "zod";
 
+import { FocusedSocialCard } from "@/components/social/FocusedSocialCard";
+import {
+  MentionComposer,
+  MentionText,
+} from "@/components/social/MentionComposer";
+import { SocialEvent } from "@/components/social/SocialEvent";
+import { Badge } from "@/components/ui/badge";
 import { Bubble, BubbleContent } from "@/components/ui/bubble";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Marker, MarkerContent } from "@/components/ui/marker";
 import {
   Message,
@@ -36,10 +44,16 @@ import {
 } from "@/components/ui/message-scroller";
 import { useMessageDraft } from "@/hooks/useMessageDraft";
 import { conversationRequest } from "@/lib/conversation/client";
+import { mentionMetadata, type Mention } from "@/lib/mentions";
 
 import { TransferCard } from "./TransferCard";
 
 type Snapshot = FunctionReturnType<typeof api.conversations.current>;
+
+type ConversationMessage = UIMessage<{
+  mentions?: Mention[];
+  socialEvent?: NonNullable<Doc<"messages">["event"]>;
+}>;
 
 function readableError(error: Error) {
   try {
@@ -78,29 +92,45 @@ function BalanceResult({
   const value = result.data;
 
   return (
-    <div className="my-5 max-w-sm rounded-3xl border bg-card p-5 shadow-xs">
-      <div className="flex justify-between text-[11px] text-muted-foreground">
-        <span>Your balance</span>
-        <span>Stellar testnet</span>
-      </div>
-      <p className="mt-3 text-3xl tracking-tight tabular-nums">
-        {value.amount}{" "}
-        <span className="text-sm text-muted-foreground">XLM</span>
-      </p>
-      <p className="mt-3 text-[10px] text-muted-foreground">
-        Checked{" "}
-        <time dateTime={value.observedAt}>
-          {value.observedAt.replace("T", " ").slice(0, 16)} UTC
-        </time>{" "}
-        · refresh in Account
-      </p>
-    </div>
+    <Card className="my-5 w-full max-w-sm">
+      <CardHeader className="flex flex-row items-center justify-between">
+        <div className="flex items-center gap-3">
+          <span
+            aria-hidden="true"
+            className="flex size-9 shrink-0 items-center justify-center rounded-full bg-foreground text-background"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              className="size-5"
+              focusable="false"
+            >
+              <path d="M12.003 1.716c-1.37 0-2.7.27-3.948.78A10.18 10.18 0 0 0 2.66 7.901a10.136 10.136 0 0 0-.797 3.954c0 .258.01.516.027.775a1.942 1.942 0 0 1-1.055 1.88L0 14.934v1.902l2.463-1.26.072-.032v.005l.77-.39.758-.385.066-.039 14.807-7.56 1.666-.847 3.392-1.732V2.694L17.792 5.86 3.744 13.025l-.104.055-.017-.115a8.286 8.286 0 0 1-.071-1.105c0-2.255.88-4.377 2.474-5.977a8.462 8.462 0 0 1 2.71-1.82 8.513 8.513 0 0 1 3.2-.654h.067a8.41 8.41 0 0 1 4.09 1.055l1.628-.83.126-.066a10.11 10.11 0 0 0-5.845-1.853zM24 7.143 5.047 16.808l-1.666.847L0 19.382v1.902l3.282-1.671 2.91-1.485 14.058-7.153.105-.055.016.115c.05.369.072.743.072 1.11 0 2.255-.88 4.383-2.475 5.978a8.461 8.461 0 0 1-2.71 1.82 8.305 8.305 0 0 1-3.2.654h-.06c-1.441 0-2.86-.369-4.102-1.061l-.066.033-1.683.857c.594.418 1.232.776 1.903 1.062a10.11 10.11 0 0 0 3.947.797 10.09 10.09 0 0 0 7.17-2.975 10.136 10.136 0 0 0 2.969-7.18c0-.259-.005-.523-.027-.781a1.942 1.942 0 0 1 1.055-1.88L24 9.044z" />
+            </svg>
+          </span>
+          <CardTitle>Balance</CardTitle>
+        </div>
+        <Badge variant="secondary">
+          <span className="sr-only">Stellar </span>Testnet
+        </Badge>
+      </CardHeader>
+      <CardContent>
+        <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+          <span className="min-w-0 text-5xl leading-none font-medium tracking-tighter break-all tabular-nums">
+            {value.amount}
+          </span>{" "}
+          <span className="text-base text-muted-foreground">{value.asset}</span>
+        </p>
+      </CardContent>
+    </Card>
   );
 }
 
 export function Conversation({
   preloaded,
   preloadedOperations,
+  preloadedSocial,
+  preloadedIncomingPending,
   userId,
   name,
   welcome,
@@ -109,6 +139,10 @@ export function Conversation({
 }: {
   preloaded: Preloaded<typeof api.conversations.current>;
   preloadedOperations: Preloaded<typeof api.operations.recent>;
+  preloadedSocial: Preloaded<typeof api.social.current>;
+  preloadedIncomingPending: Preloaded<
+    typeof api.operations.pendingIncomingCount
+  >;
   userId: string;
   name: string;
   welcome: ReactNode;
@@ -117,6 +151,8 @@ export function Conversation({
 }) {
   const snapshot = usePreloadedQuery(preloaded);
   const recent = usePreloadedQuery(preloadedOperations);
+  const social = usePreloadedQuery(preloadedSocial);
+  const incomingPending = usePreloadedQuery(preloadedIncomingPending);
   const [older, setOlder] = useState<Snapshot["messages"]>([]);
 
   const [olderOperations, setOlderOperations] = useState<
@@ -128,7 +164,7 @@ export function Conversation({
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [historyError, setHistoryError] = useState<string>();
   const [syncError, setSyncError] = useState<string>();
-  const { draft, updateDraft, hydrated } = useMessageDraft(userId);
+  const { draft, mentions, updateDraft, hydrated } = useMessageDraft(userId);
   const [now, setNow] = useState(0);
   const composer = useRef<HTMLTextAreaElement>(null);
   const sent = useRef<{ id: string; text: string } | null>(null);
@@ -144,9 +180,18 @@ export function Conversation({
     [older, snapshot.messages],
   );
 
-  // SAFETY: messages are stored in UIMessage format only by the authenticated AI SDK route, never by browser writes.
   const saved = useMemo(
-    () => records.map((row) => JSON.parse(row.content) as UIMessage),
+    () =>
+      records.map((row) => {
+        // SAFETY: UIMessage content is written only by trusted conversation and
+        // event functions. Social references below come from validated DB fields.
+        const message = JSON.parse(row.content) as ConversationMessage;
+
+        return {
+          ...message,
+          metadata: { mentions: row.mentions ?? [], socialEvent: row.event },
+        };
+      }),
     [records],
   );
 
@@ -168,7 +213,7 @@ export function Conversation({
 
   const transport = useMemo(
     () =>
-      new DefaultChatTransport({
+      new DefaultChatTransport<ConversationMessage>({
         api: "/api/chat",
         headers: { "X-Naru-User": userId },
         prepareSendMessagesRequest: ({ messages }) => {
@@ -179,6 +224,9 @@ export function Conversation({
               message: {
                 id: message.id,
                 role: "user",
+                mentions:
+                  mentionMetadata.safeParse(message.metadata).data?.mentions ??
+                  [],
                 parts: [
                   {
                     type: "text",
@@ -196,7 +244,7 @@ export function Conversation({
   );
 
   const { messages, sendMessage, setMessages, status, error, clearError } =
-    useChat({
+    useChat<ConversationMessage>({
       id: `naru-${userId}`,
       messages: saved,
       transport,
@@ -209,7 +257,10 @@ export function Conversation({
     (now === 0 || snapshot.conversation.activeUntil > now);
 
   const started = messages.length > 0 || saved.length > 0;
-  const pending = recent.some((operation) => operation.state === "submitting");
+
+  const pending =
+    incomingPending > 0 ||
+    recent.some((operation) => operation.state === "submitting");
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
@@ -287,7 +338,7 @@ export function Conversation({
   }, [userId]);
 
   useEffect(() => {
-    if (!recent.length) return;
+    if (!recent.length && !incomingPending) return;
     let running = false;
 
     const check = async () => {
@@ -309,7 +360,7 @@ export function Conversation({
       clearInterval(interval);
       window.removeEventListener("online", check);
     };
-  }, [pending, recent.length, reconcile]);
+  }, [pending, recent.length, incomingPending, reconcile]);
 
   async function submit(text = draft) {
     if (!text.trim() || streaming || serverBusy || !hydrated) return;
@@ -320,7 +371,8 @@ export function Conversation({
     await sendMessage({
       id,
       role: "user",
-      parts: [{ type: "text", text: text.trim() }],
+      parts: [{ type: "text", text }],
+      metadata: { mentions: text === draft ? mentions : [] },
     });
   }
 
@@ -378,6 +430,7 @@ export function Conversation({
                 aria-busy={streaming || serverBusy}
                 className="flex-1"
               >
+                <FocusedSocialCard userId={userId} />
                 {!started ? (
                   <MessageScrollerItem
                     messageId="welcome"
@@ -483,6 +536,12 @@ export function Conversation({
                             </MessageAvatar>
                           )}
                           <MessageContent>
+                            {message.metadata?.socialEvent && (
+                              <SocialEvent
+                                event={message.metadata.socialEvent}
+                                userId={userId}
+                              />
+                            )}
                             <Bubble
                               variant={
                                 message.role === "user" ? "muted" : "ghost"
@@ -493,7 +552,9 @@ export function Conversation({
                             >
                               <BubbleContent
                                 className={
-                                  message.role === "user" ? undefined : "w-full"
+                                  message.role === "user"
+                                    ? undefined
+                                    : "w-full overflow-visible"
                                 }
                               >
                                 <span className="sr-only">
@@ -507,7 +568,12 @@ export function Conversation({
                                         dir="auto"
                                         className="whitespace-pre-wrap break-words [&+p]:mt-3"
                                       >
-                                        {part.text}
+                                        <MentionText
+                                          text={part.text}
+                                          mentions={
+                                            message.metadata?.mentions ?? []
+                                          }
+                                        />
                                       </p>
                                     );
 
@@ -605,50 +671,18 @@ export function Conversation({
             </Button>
           </div>
         )}
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            void submit();
-          }}
-          className="flex items-end gap-3 rounded-[1.6rem] border border-border bg-card p-3 pl-5 shadow-[0_4px_24px_-12px_rgb(0_0_0/.15)] focus-within:border-ring"
-        >
-          <label className="sr-only" htmlFor="naru-message">
-            Message {name}
-          </label>
-          <textarea
-            ref={composer}
-            id="naru-message"
-            rows={1}
-            value={draft}
-            maxLength={4000}
-            disabled={!hydrated}
-            onChange={(e) => updateDraft(e.target.value)}
-            onKeyDown={(event) => {
-              if (
-                event.key === "Enter" &&
-                !event.shiftKey &&
-                !event.nativeEvent.isComposing &&
-                window.matchMedia("(min-width: 768px)").matches
-              ) {
-                event.preventDefault();
-                void submit();
-              }
-            }}
-            placeholder={`Talk to ${name}…`}
-            className="max-h-36 min-h-10 flex-1 resize-none bg-transparent py-2 text-base leading-6 outline-none placeholder:text-muted-foreground/70 md:text-sm"
-          />
-          <Button
-            type="submit"
-            size="icon"
-            className="size-10 shrink-0"
-            disabled={!draft.trim() || streaming || serverBusy || !hydrated}
-            aria-label="Send message"
-          >
-            <span aria-hidden="true" className="text-xl">
-              ↑
-            </span>
-          </Button>
-        </form>
+        <MentionComposer
+          composer={composer}
+          draft={draft}
+          mentions={mentions}
+          updateDraft={updateDraft}
+          friends={social.friends.map((row) => row.person)}
+          named={!!social.me}
+          name={name}
+          hydrated={hydrated}
+          busy={streaming || serverBusy}
+          submit={() => void submit()}
+        />
         <p className="mt-2.5 text-center text-[10px] text-muted-foreground">
           A little company for your money.{" "}
           <span className="whitespace-nowrap">

@@ -1,7 +1,8 @@
 import { z } from "zod";
 
 type RequestBody = {
-  action: "review" | "authorize" | "cancel" | "edit" | "fund";
+  action: "review" | "authorize" | "cancel" | "edit" | "fund" | "request";
+  requestId?: string;
   id?: string;
   revision?: number;
   amount?: string;

@@ -148,7 +148,28 @@
 }
 
 @media (prefers-reduced-motion: no-preference) {
+  .naru-coin-delivery {
+    animation: naru-coin-arrival 1600ms ease-in-out both;
+  }
   .naru-presence[data-delight="true"] {
     animation: naru-confirmed 900ms ease-in-out;
+  }
+}
+
+@keyframes naru-coin-arrival {
+  0% {
+    transform: translateX(0) rotate(-20deg);
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  70% {
+    transform: translateX(40px) translateY(-8px) rotate(20deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(56px) rotate(0);
+    opacity: 0;
   }
 }

@@ -13,7 +13,7 @@ import { parseAmount } from "@/lib/money";
 import { readPaymentStatus } from "@/lib/smart-account/server/payments-http";
 import { SmartAccountService } from "@/lib/smart-account/server/service";
 
-const input = z
+const operationInput = z
   .object({
     action: z.enum(["review", "authorize", "cancel", "edit"]),
     id: z.string().min(1).max(100),
@@ -23,6 +23,16 @@ const input = z
     auth: z.string().max(30_000).optional(),
   })
   .strict();
+
+const input = z.union([
+  operationInput,
+  z
+    .object({
+      action: z.literal("request"),
+      requestId: z.string().min(1).max(100),
+    })
+    .strict(),
+]);
 
 async function handle(request: Request) {
   let service: SmartAccountService | undefined;
@@ -39,7 +49,13 @@ async function handle(request: Request) {
     if (request.method === "GET") {
       const operations = await fetchQuery(api.operations.recent, {}, { token });
 
-      for (const operation of operations)
+      const incoming = await fetchQuery(
+        api.operations.incomingForReconciliation,
+        { key },
+        { token },
+      );
+
+      for (const operation of [...operations, ...incoming])
         await reconcileOperation(operation, token, service);
 
       if (operations.some((operation) => operation.state === "submitting"))
@@ -52,6 +68,24 @@ async function handle(request: Request) {
     }
 
     const body = await readJson(request, input);
+
+    if (body.action === "request") {
+      // Only an ID crosses the browser boundary. Convex derives and freezes
+      // amount, asset, payer and organizer account from the owned request.
+      // SAFETY: Convex v.id validates the table ID and requestAccess checks the authenticated participant before any payment is prepared.
+      const requestId = body.requestId as Id<"paymentRequests">;
+
+      const id = await fetchMutation(
+        api.operations.prepareRequest,
+        { key, requestId, token: service.config.publicConfig.token },
+        { token },
+      );
+
+      return Response.json({
+        operation: await fetchQuery(api.operations.get, { id }, { token }),
+      });
+    }
+
     // SAFETY: Convex's v.id validator checks the table ID, and operations.get checks the authenticated owner before any use.
     const id = body.id as Id<"operations">;
     const operation = await fetchQuery(api.operations.get, { id }, { token });
@@ -117,6 +151,7 @@ async function handle(request: Request) {
 
       if (!job || job.account !== operation.account || job.kind !== "transfer")
         throw new Error("Transfer review not found.");
+      service.assertTransfer(job, operation);
       await fetchMutation(
         api.operations.change,
         {

@@ -15,6 +15,8 @@ import { RecentOperations } from "@/components/conversation/RecentOperations";
 import { CompanionScene } from "@/components/onboarding/CompanionScene";
 import { ExperiencePage } from "@/components/onboarding/ExperiencePage";
 import { Frame } from "@/components/onboarding/Frame";
+import { People } from "@/components/social/People";
+import { SocialMenus } from "@/components/social/SocialMenus";
 import { getAuthConfig } from "@/lib/auth/config";
 import { sessionIdentity } from "@/lib/auth/server";
 import { accents } from "@/lib/companion-art";
@@ -55,10 +57,20 @@ async function AuthenticatedHome() {
   if (!companion.paymentChoiceMade) redirect("/activate");
 
   // Private, live data: preload on the server, subscribe only in its interactive consumer.
-  const [conversation, payments, operations] = await Promise.all([
+  const [
+    conversation,
+    payments,
+    operations,
+    social,
+    notifications,
+    incomingPending,
+  ] = await Promise.all([
     preloadQuery(api.conversations.current, {}, { token }),
     preloadQuery(api.payments.current, {}, { token }),
     preloadQuery(api.operations.recent, {}, { token }),
+    preloadQuery(api.social.current, {}, { token }),
+    preloadQuery(api.notifications.current, {}, { token }),
+    preloadQuery(api.operations.pendingIncomingCount, {}, { token }),
   ]);
 
   const accent = accents.find((option) => option.id === companion.accent)!;
@@ -70,7 +82,7 @@ async function AuthenticatedHome() {
         <>
           <nav
             aria-label="Your money and companion"
-            className="flex items-center gap-3 md:gap-5"
+            className="flex min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-0 md:gap-5"
           >
             <HomeMenu label="Account">
               <AccountPanel preloaded={payments} userId={userId} />
@@ -85,6 +97,10 @@ async function AuthenticatedHome() {
                 companion={{ name: companion.name, accent: companion.accent }}
               />
             </HomeMenu>
+            <SocialMenus
+              preloaded={notifications}
+              people={<People preloaded={social} />}
+            />
           </nav>
           <UserButton />
         </>
@@ -96,6 +112,8 @@ async function AuthenticatedHome() {
         name={companion.name}
         preloaded={conversation}
         preloadedOperations={operations}
+        preloadedSocial={social}
+        preloadedIncomingPending={incomingPending}
         presence={
           <Image
             src={accent.image}

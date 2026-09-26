@@ -11,9 +11,15 @@
 import type * as access from "../access.js";
 import type * as companions from "../companions.js";
 import type * as conversations from "../conversations.js";
+import type * as money from "../money.js";
+import type * as notifications from "../notifications.js";
 import type * as operations from "../operations.js";
 import type * as payments from "../payments.js";
 import type * as profiles from "../profiles.js";
+import type * as replies from "../replies.js";
+import type * as social from "../social.js";
+import type * as socialShared from "../socialShared.js";
+import type * as splits from "../splits.js";
 import type * as validators from "../validators.js";
 
 import type {
@@ -26,9 +32,15 @@ declare const fullApi: ApiFromModules<{
   access: typeof access;
   companions: typeof companions;
   conversations: typeof conversations;
+  money: typeof money;
+  notifications: typeof notifications;
   operations: typeof operations;
   payments: typeof payments;
   profiles: typeof profiles;
+  replies: typeof replies;
+  social: typeof social;
+  socialShared: typeof socialShared;
+  splits: typeof splits;
   validators: typeof validators;
 }>;
 
