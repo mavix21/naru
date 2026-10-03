@@ -49,11 +49,10 @@ export async function GET(request: Request) {
   const access = gateStatus(request.headers);
 
   if (access !== 200) return gateResponse(access);
-  let service: SmartAccountService | undefined;
 
   try {
-    service = new SmartAccountService();
-    service.store.rate(`read:${Math.floor(Date.now() / 60_000)}`, 180);
+    const service = new SmartAccountService();
+    await service.store.rate(`read:${Math.floor(Date.now() / 60_000)}`, 180);
     const address = new URL(request.url).searchParams.get("account");
 
     return json(
@@ -71,8 +70,6 @@ export async function GET(request: Request) {
       },
       400,
     );
-  } finally {
-    service?.store.close();
   }
 }
 
@@ -86,7 +83,6 @@ export async function POST(request: Request) {
     request.headers.get("content-type")?.split(";")[0] !== "application/json"
   )
     return json({ error: "Same-origin JSON requests required." }, 403);
-  let service: SmartAccountService | undefined;
 
   try {
     // Read with a hard bound even when Content-Length is absent/chunked.
@@ -115,8 +111,8 @@ export async function POST(request: Request) {
       JSON.parse(Buffer.concat(chunks).toString("utf8")),
     );
 
-    service = new SmartAccountService();
-    service.store.rate(`write:${Math.floor(Date.now() / 60_000)}`, 30);
+    const service = new SmartAccountService();
+    await service.store.rate(`write:${Math.floor(Date.now() / 60_000)}`, 30);
 
     switch (body.action) {
       case "deploy":
@@ -145,7 +141,5 @@ export async function POST(request: Request) {
       },
       400,
     );
-  } finally {
-    service?.store.close();
   }
 }

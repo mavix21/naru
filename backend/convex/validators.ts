@@ -1,5 +1,19 @@
 import { v } from "convex/values";
 
+export const sponsorJobKind = v.union(
+  v.literal("deploy"),
+  v.literal("fund"),
+  v.literal("transfer"),
+);
+
+export const sponsorJobState = v.union(
+  v.literal("review"),
+  v.literal("preparing"),
+  v.literal("pending"),
+  v.literal("confirmed"),
+  v.literal("failed"),
+);
+
 export const profileFields = {
   clerkUserId: v.string(),
   username: v.optional(v.string()),

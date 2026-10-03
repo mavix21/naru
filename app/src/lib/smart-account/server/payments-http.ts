@@ -7,6 +7,8 @@ import { xdr } from "@stellar/stellar-sdk";
 import { fetchMutation, fetchQuery } from "convex/nextjs";
 import { z } from "zod";
 
+import { serverKey } from "@/lib/auth/server";
+
 import {
   deploymentSchema,
   passkeyProofSchema,
@@ -51,17 +53,6 @@ function json(body: Parameters<typeof Response.json>[0], status = 200) {
   });
 }
 
-function paymentsKey() {
-  const key = process.env.NARU_PAYMENTS_KEY;
-
-  if (!key || key.length < 32)
-    throw new Error(
-      "Payment state is not configured. Set NARU_PAYMENTS_KEY on the app and the Convex deployment.",
-    );
-
-  return key;
-}
-
 function getEnrollment(token: string) {
   return fetchQuery(api.payments.enrollment, {}, { token });
 }
@@ -96,7 +87,7 @@ function update(
 ) {
   return fetchMutation(
     api.payments.apply,
-    { key: paymentsKey(), action },
+    { key: serverKey(), action },
     { token },
   );
 }
@@ -197,8 +188,6 @@ async function resume(
 }
 
 async function handle(request: Request) {
-  let service: SmartAccountService | undefined;
-
   try {
     const session = await auth();
 
@@ -222,7 +211,7 @@ async function handle(request: Request) {
       process.env.NODE_ENV === "development" && origin.hostname === "localhost";
 
     // The user-facing endpoint uses Clerk, while retaining the explicit testnet
-    // enable switch, exact host/origin, persistent store, and sponsor budgets.
+    // enable switch, exact host/origin, Convex state, and sponsor budgets.
     if (
       request.headers.get("host") !== origin.host ||
       (!local &&
@@ -263,12 +252,12 @@ async function handle(request: Request) {
         { error: "Save your companion before activating payments." },
         403,
       );
-    service = new SmartAccountService();
-    service.store.rate(
+    const service = new SmartAccountService();
+    await service.store.rate(
       `${request.method === "GET" ? "read" : "write"}:${Math.floor(Date.now() / 60_000)}`,
       request.method === "GET" ? 180 : 30,
     );
-    service.store.rate(
+    await service.store.rate(
       `payments:${request.method}:${session.userId}:${Math.floor(Date.now() / 60_000)}`,
       60,
     );
@@ -279,9 +268,9 @@ async function handle(request: Request) {
       const payment = await readPaymentStatus(service, token, null);
 
       const funding = payment.account
-        ? service.store
-            .accountJobs(payment.account)
-            .find((job) => job.kind === "fund")
+        ? (await service.store.accountJobs(payment.account)).find(
+            (job) => job.kind === "fund",
+          )
         : null;
 
       return json({
@@ -298,7 +287,7 @@ async function handle(request: Request) {
           await fetchMutation(
             api.payments.apply,
             {
-              key: paymentsKey(),
+              key: serverKey(),
               action: { kind: "reserve", device: body.device },
             },
             { token },
@@ -335,7 +324,7 @@ async function handle(request: Request) {
 
         // A credential that already belongs to an earlier sponsored account
         // cannot be imported into this user's onboarding.
-        if (service.store.accountJobs(deployment.account).length)
+        if ((await service.store.accountJobs(deployment.account)).length)
           throw new Error(
             "This credential belongs to an earlier account. It cannot be imported into onboarding.",
           );
@@ -414,8 +403,6 @@ async function handle(request: Request) {
       },
       400,
     );
-  } finally {
-    service?.store.close();
   }
 }
 

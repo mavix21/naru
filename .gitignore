@@ -49,6 +49,3 @@ app-lib/clients/*
 
 # TypeScript incremental build info
 *.tsbuildinfo
-
-# Durable local testnet sponsorship state (never secrets or private user keys)
-.naru-smart-account.sqlite*

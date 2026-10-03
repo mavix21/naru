@@ -13,6 +13,8 @@ import { parseAmount } from "@/lib/money";
 import { readPaymentStatus } from "@/lib/smart-account/server/payments-http";
 import { SmartAccountService } from "@/lib/smart-account/server/service";
 
+export const maxDuration = 150;
+
 const operationInput = z
   .object({
     action: z.enum(["review", "authorize", "cancel", "edit"]),
@@ -35,13 +37,11 @@ const input = z.union([
 ]);
 
 async function handle(request: Request) {
-  let service: SmartAccountService | undefined;
-
   try {
     const { token, userId } = await requireRequest(request, true);
     const key = serverKey();
-    service = new SmartAccountService();
-    service.store.rate(
+    const service = new SmartAccountService();
+    await service.store.rate(
       `conversation-payments:${userId}:${Math.floor(Date.now() / 60_000)}`,
       40,
     );
@@ -147,7 +147,7 @@ async function handle(request: Request) {
 
       if (!body.reviewId || !body.auth || operation.reviewId !== body.reviewId)
         throw new Error("Passkey authorization must match this operation.");
-      const job = service.store.get(body.reviewId);
+      const job = await service.store.get(body.reviewId);
 
       if (!job || job.account !== operation.account || job.kind !== "transfer")
         throw new Error("Transfer review not found.");
@@ -166,16 +166,17 @@ async function handle(request: Request) {
       try {
         await service.authorize(body.reviewId, body.auth);
       } catch (error) {
-        const current = service.store.get(body.reviewId);
+        const current = await service.store.get(body.reviewId);
 
         if (current?.state === "review")
-          service.store.finish(
+          await service.store.finish(
             current.id,
             "failed",
             null,
             error instanceof Error
               ? error.message.slice(0, 300)
               : "Authorization could not be submitted.",
+            "review",
           );
       }
 
@@ -199,8 +200,6 @@ async function handle(request: Request) {
       },
       { status: 400 },
     );
-  } finally {
-    service?.store.close();
   }
 }
 

@@ -44,29 +44,25 @@ export function moneyTools(
           return { active: false, activationPath: "/activate" };
         const service = new SmartAccountService();
 
-        try {
-          const current = await readPaymentStatus(service, token, null);
+        const current = await readPaymentStatus(service, token, null);
 
-          if (current.state !== "ready")
-            return { active: false, activationPath: "/activate" };
+        if (current.state !== "ready")
+          return { active: false, activationPath: "/activate" };
 
-          if (current.balance === null)
-            throw new Error(
-              current.balanceError ||
-                "The current balance is unavailable. Please refresh Account.",
-            );
-          const units = current.balance;
+        if (current.balance === null)
+          throw new Error(
+            current.balanceError ||
+              "The current balance is unavailable. Please refresh Account.",
+          );
+        const units = current.balance;
 
-          return {
-            active: true,
-            amount: displayAmount(units),
-            asset: "XLM",
-            network: "Stellar testnet",
-            observedAt: new Date().toISOString(),
-          };
-        } finally {
-          service.store.close();
-        }
+        return {
+          active: true,
+          amount: displayAmount(units),
+          asset: "XLM",
+          network: "Stellar testnet",
+          observedAt: new Date().toISOString(),
+        };
       },
     }),
     prepareTransfer: tool({
@@ -100,47 +96,42 @@ export function moneyTools(
         const parsed = parseAmount(amount);
         const service = new SmartAccountService();
 
-        try {
-          await Promise.all([
-            service.requireAccount(payment.account),
-            service.requireAccount(recipient.account),
-          ]);
+        await Promise.all([
+          service.requireAccount(payment.account),
+          service.requireAccount(recipient.account),
+        ]);
 
-          if (
-            BigInt(await service.balance(payment.account)) <
-            BigInt(parsed.units)
-          )
-            return {
-              error: "Insufficient test XLM balance. No transfer was prepared.",
-            };
-
-          const operationId = await fetchMutation(
-            api.operations.prepare,
-            {
-              key: serverKey(),
-              messageId,
-              account: payment.account,
-              recipientUserId: recipient.userId,
-              recipientEmail: "",
-              recipientName: recipient.person.displayName,
-              recipientProfileId: recipient.person.userId,
-              recipientUsername: recipient.person.username,
-              recipient: recipient.account,
-              token: service.config.publicConfig.token,
-              ...parsed,
-            },
-            { token: await getToken() },
-          );
-
+        if (
+          BigInt(await service.balance(payment.account)) < BigInt(parsed.units)
+        )
           return {
-            operationId,
-            status: "awaiting_approval",
-            instruction:
-              "Read the live operation card. Nothing has been sent. Confirm and authorize with a passkey there.",
+            error: "Insufficient test XLM balance. No transfer was prepared.",
           };
-        } finally {
-          service.store.close();
-        }
+
+        const operationId = await fetchMutation(
+          api.operations.prepare,
+          {
+            key: serverKey(),
+            messageId,
+            account: payment.account,
+            recipientUserId: recipient.userId,
+            recipientEmail: "",
+            recipientName: recipient.person.displayName,
+            recipientProfileId: recipient.person.userId,
+            recipientUsername: recipient.person.username,
+            recipient: recipient.account,
+            token: service.config.publicConfig.token,
+            ...parsed,
+          },
+          { token: await getToken() },
+        );
+
+        return {
+          operationId,
+          status: "awaiting_approval",
+          instruction:
+            "Read the live operation card. Nothing has been sent. Confirm and authorize with a passkey there.",
+        };
       },
     }),
     prepareSplit: tool({

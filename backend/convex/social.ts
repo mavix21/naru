@@ -20,7 +20,7 @@ export const claimUsername = mutation({
 
     if (!/^[a-z][a-z0-9_]{2,23}$/.test(username))
       throw new ConvexError(
-        "Use 3–24 letters, numbers or underscores, starting with a letter.",
+        "Use 3-24 letters, numbers or underscores, starting with a letter.",
       );
 
     if (
@@ -28,7 +28,7 @@ export const claimUsername = mutation({
       displayName.length > 60 ||
       /[\p{Cc}\p{Cf}]/u.test(displayName)
     )
-      throw new ConvexError("Use a display name of 1–60 characters.");
+      throw new ConvexError("Use a display name of 1-60 characters.");
     const profile = await profileFor(ctx, user);
 
     if (!profile) throw new ConvexError("Save your companion first.");

@@ -60,7 +60,7 @@ function transferFunction(
 
 export class SmartAccountService {
   config = serverConfig();
-  store = new SponsorStore(this.config.database);
+  store = new SponsorStore();
 
   async ready() {
     const [network, code, verifier] = await Promise.all([
@@ -146,9 +146,9 @@ export class SmartAccountService {
   }
 
   async requireAccount(account: string) {
-    const deployment = this.store
-      .accountJobs(account)
-      .find((job) => job.kind === "deploy" && job.state === "confirmed");
+    const deployment = (await this.store.accountJobs(account)).find(
+      (job) => job.kind === "deploy" && job.state === "confirmed",
+    );
 
     if (!deployment)
       throw new Error("This account has no confirmed Naru testnet deployment.");
@@ -172,7 +172,7 @@ export class SmartAccountService {
   }
 
   async status(account: string): Promise<AccountStatus> {
-    const records = this.store.accountJobs(account);
+    const records = await this.store.accountJobs(account);
     const jobs: Job[] = [];
 
     for (const record of records) jobs.push(await this.reconcile(record));
@@ -224,29 +224,28 @@ export class SmartAccountService {
       TESTNET,
     );
 
-    const previous = this.store
-      .accountJobs(account)
-      .find((job) => job.kind === "deploy" && job.state !== "failed");
+    const previous = (await this.store.accountJobs(account)).find(
+      (job) => job.kind === "deploy" && job.state !== "failed",
+    );
 
     if (previous) {
-      if (previous.state !== "review") return this.reconcile(previous);
+      if (previous.state !== "review") {
+        const current = await this.reconcile(previous);
+
+        if (current.state !== "failed") return current;
+      }
 
       if (previous.func !== payload.func)
         throw new Error("Existing deployment has different constructor data.");
-      // No envelope was ever signed for a review-only job. Retire it and
-      // rebuild authorization for the same credential after interruption.
-      this.store.finish(
-        previous.id,
-        "failed",
-        null,
-        "Unsubmitted deployment replaced by an explicit resume.",
-      );
     }
 
     await this.ready();
-    this.store.rate(`deploy:${new Date().toISOString().slice(0, 10)}`, 10);
+    await this.store.rate(
+      `deploy:${new Date().toISOString().slice(0, 10)}`,
+      10,
+    );
 
-    const job = this.store.insert(
+    const job = await this.store.insert(
       randomUUID(),
       account,
       "deploy",
@@ -259,13 +258,17 @@ export class SmartAccountService {
   }
 
   async resumeVerifiedDeployment(deployment: Deployment) {
-    const previous = this.store
-      .accountJobs(deployment.account)
-      .find((job) => job.kind === "deploy" && job.state !== "failed");
+    const previous = (await this.store.accountJobs(deployment.account)).find(
+      (job) => job.kind === "deploy" && job.state !== "failed",
+    );
 
     // Never replace an ambiguous signed envelope or allocate a second account.
-    if (previous && previous.state !== "review")
-      return this.reconcile(previous);
+    if (previous && previous.state !== "review") {
+      const current = await this.reconcile(previous);
+
+      if (current.state !== "failed") return current;
+    }
+
     const func = xdr.HostFunction.fromXDR(deployment.payload.func, "base64");
 
     const originalAuth = deployment.payload.auth.map((entry) =>
@@ -341,18 +344,14 @@ export class SmartAccountService {
   async fund(account: string) {
     await this.requireAccount(account);
 
-    const previous = this.store
-      .accountJobs(account)
-      .find((job) => job.kind === "fund" && job.state !== "failed");
+    const previous = (await this.store.accountJobs(account)).find(
+      (job) => job.kind === "fund" && job.state !== "failed",
+    );
 
-    if (previous) {
-      if (previous.state !== "review") return this.reconcile(previous);
-      this.store.finish(
-        previous.id,
-        "failed",
-        null,
-        "Unsubmitted funding intent replaced by an explicit retry.",
-      );
+    if (previous && previous.state !== "review") {
+      const current = await this.reconcile(previous);
+
+      if (current.state !== "failed") return current;
     }
 
     const { func, auth } = buildFundingTransfer(
@@ -361,7 +360,7 @@ export class SmartAccountService {
       account,
     );
 
-    const job = this.store.insert(
+    const job = await this.store.insert(
       randomUUID(),
       account,
       "fund",
@@ -377,7 +376,10 @@ export class SmartAccountService {
     account: string,
     transfer = { recipient: this.config.publicConfig.recipient, amount: "0.1" },
   ): Promise<TransferReview> {
-    this.store.rate(`review:${new Date().toISOString().slice(0, 10)}`, 100);
+    await this.store.rate(
+      `review:${new Date().toISOString().slice(0, 10)}`,
+      100,
+    );
     await this.requireAccount(account);
     const { units, amount } = parseAmount(transfer.amount);
 
@@ -427,7 +429,7 @@ export class SmartAccountService {
     const expiresAt = Date.now() + 120_000;
     const id = randomUUID();
     const auth = entry.toXDR("base64");
-    this.store.insert(
+    await this.store.insert(
       id,
       account,
       "transfer",
@@ -449,7 +451,7 @@ export class SmartAccountService {
   }
 
   async authorize(id: string, authXdr: string) {
-    const job = this.store.get(id);
+    const job = await this.store.get(id);
 
     if (!job || job.kind !== "transfer")
       throw new Error("Unknown transfer review.");
@@ -515,12 +517,22 @@ export class SmartAccountService {
     job: RecordEntry,
     auth: xdr.SorobanAuthorizationEntry[],
   ): Promise<Job> {
-    if (!this.store.claim(job.id))
-      return this.reconcile(this.store.get(job.id)!);
+    // A previous funding, deployment, or transfer may belong to another user.
+    // Reconcile its saved envelope before claiming the sponsor for a new send.
+    // An ambiguous submission stays locked; abandoned preparation can expire.
+    const inFlight = await this.store.inFlight();
+
+    if (inFlight) await this.reconcile(inFlight);
+
+    if (!(await this.store.claim(job.id)))
+      return this.reconcile((await this.store.get(job.id))!);
     let persisted = false;
 
     try {
-      this.store.rate(`submit:${new Date().toISOString().slice(0, 10)}`, 60);
+      await this.store.rate(
+        `submit:${new Date().toISOString().slice(0, 10)}`,
+        60,
+      );
 
       const transaction = await this.transaction(
         xdr.HostFunction.fromXDR(job.func, "base64"),
@@ -551,8 +563,8 @@ export class SmartAccountService {
         );
       prepared.sign(this.config.sponsor);
       // Commit the exact signed envelope/hash BEFORE any network send. Replays
-      // reuse this envelope and sequence, even after a process restart.
-      this.store.pending(
+      // reuse this envelope and sequence across Vercel invocations.
+      await this.store.pending(
         job.id,
         prepared.hash().toString("hex"),
         prepared.toXDR(),
@@ -561,21 +573,24 @@ export class SmartAccountService {
       await server.sendTransaction(prepared);
     } catch (error) {
       if (!persisted)
-        this.store.finish(
+        await this.store.finish(
           job.id,
           "failed",
           null,
           error instanceof Error
             ? error.message.slice(0, 600)
             : "Submission preparation failed.",
+          "preparing",
         );
       // A transport error after persistence is ambiguous, never a confirmed failure.
     }
 
-    return this.reconcile(this.store.get(job.id)!);
+    return this.reconcile((await this.store.get(job.id))!);
   }
 
   async reconcile(job: RecordEntry): Promise<Job> {
+    if (job.state === "preparing") job = await this.store.recover(job.id);
+
     if (job.state !== "pending" || !job.hash || !job.envelope)
       return jobSchema.parse(job);
 
@@ -608,13 +623,20 @@ export class SmartAccountService {
         throw new Error(
           "RPC confirmation did not match the persisted signed transaction.",
         );
-      this.store.finish(job.id, "confirmed", result.ledger, null);
+      await this.store.finish(
+        job.id,
+        "confirmed",
+        result.ledger,
+        null,
+        "pending",
+      );
     } else if (result.status === "FAILED") {
-      this.store.finish(
+      await this.store.finish(
         job.id,
         "failed",
         result.ledger,
         `On-chain failure: ${result.resultXdr.toXDR("base64")}`,
+        "pending",
       );
     } else {
       const transaction = TransactionBuilder.fromXDR(
@@ -638,6 +660,6 @@ export class SmartAccountService {
       // NOT_FOUND is not proof of failure (RPC history is finite). Remain pending.
     }
 
-    return jobSchema.parse(this.store.get(job.id));
+    return jobSchema.parse(await this.store.get(job.id));
   }
 }

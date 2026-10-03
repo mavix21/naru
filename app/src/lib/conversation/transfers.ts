@@ -90,21 +90,22 @@ export async function reconcileOperation(
   service: SmartAccountService,
 ) {
   if (operation.state !== "submitting" || !operation.reviewId) return;
-  let record = service.store.get(operation.reviewId);
+  let record = await service.store.get(operation.reviewId);
 
   if (!record || record.account !== operation.account) return;
   service.assertTransfer(record, operation);
 
-  // A crash between the Convex claim and the local claim cannot be resubmitted
+  // A crash between the operation claim and sponsor claim cannot be resubmitted
   // by rendering. Only an expired, never-claimed review is a definitive failure.
   if (record.state === "review" && record.expires < Date.now()) {
-    service.store.finish(
+    await service.store.finish(
       record.id,
       "failed",
       null,
       "Authorization was interrupted before submission. No transaction was sent.",
+      "review",
     );
-    record = service.store.get(record.id)!;
+    record = (await service.store.get(record.id))!;
   }
 
   const job = await service.reconcile(record);
@@ -112,13 +113,8 @@ export async function reconcileOperation(
   if (job.state === "confirmed") {
     if (!job.hash || !job.ledger)
       throw new Error("Missing confirmed transaction evidence.");
-    service.assertTransfer(service.store.get(record.id)!, operation);
+    service.assertTransfer((await service.store.get(record.id))!, operation);
   }
-
-  const error =
-    job.state === "preparing" && record.created < Date.now() - 300_000
-      ? "Submission was interrupted before a transaction reference was saved. The sponsor must reconcile this operation; do not repeat the payment."
-      : job.error;
 
   await fetchMutation(
     api.operations.change,
@@ -136,7 +132,7 @@ export async function reconcileOperation(
               ? "failed"
               : "submitting",
         hash: job.hash,
-        error,
+        error: job.error,
       },
     },
     { token },

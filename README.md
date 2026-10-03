@@ -71,16 +71,16 @@ adicionales forman parte de la visión del producto.**
 
 Para probar ambos lados, usa dos cuentas en perfiles de navegador distintos.
 
-La demo alojada permite explorar la interfaz; para probar los pagos, sigue la
-instalación local con SQLite.
+Los pagos usan Stellar Testnet y guardan su estado en Convex, tanto en local
+como en Vercel.
 
 ## Tecnología
 
 - **Next.js, React y Tailwind CSS:** interfaz y servidor.
-- **Clerk y Convex:** acceso, amigos, conversaciones y solicitudes en tiempo real.
+- **Clerk y Convex:** acceso, amigos, conversaciones, solicitudes y registro
+  persistente de transacciones, reservas del patrocinador y límites de uso.
 - **AI SDK + Vercel AI Gateway:** interpretación de mensajes y propuestas de acción.
 - **Stellar Smart Account Kit y Soroban:** cuentas y pagos con passkeys.
-- **SQLite:** registro persistente del procesamiento de transacciones.
 
 ## Ejecutar en local
 
@@ -125,8 +125,8 @@ Clerk `https://tu-instancia.clerk.accounts.dev`, sin barra final.
 Puedes crear las dos cuentas Testnet y financiarlas con Friendbot desde
 [Stellar Lab](https://lab.stellar.org). Conserva los valores locales de
 `NARU_SMART_ACCOUNT_ORIGIN` (`http://localhost:3000`) y
-`NARU_SMART_ACCOUNT_RP_ID` (`localhost`). SQLite se crea en
-`app/.naru-smart-account.sqlite`.
+`NARU_SMART_ACCOUNT_RP_ID` (`localhost`). El estado de los pagos se guarda en
+el mismo backend de Convex configurado en `NEXT_PUBLIC_CONVEX_URL`.
 
 Más opciones en [app/.env.example](app/.env.example) y
 [backend/.env.example](backend/.env.example).
@@ -149,6 +149,26 @@ usan Testnet y el backend de Convex está en la nube.
 Para desarrollar también los contratos del workspace, instala Rust, Stellar CLI
 y Stellar Scaffold CLI, inicia Docker y usa `pnpm dev` desde la raíz.
 Comprobaciones disponibles: `pnpm lint`, `pnpm typecheck` y `pnpm build`.
+
+## Desplegar en Vercel
+
+1. Configura las variables de `app/.env.example` en Vercel. Usa
+   `NARU_SMART_ACCOUNT_ENABLED=true`, `NARU_SMART_ACCOUNT_ORIGIN=https://tu-dominio`
+   y `NARU_SMART_ACCOUNT_RP_ID=tu-dominio`, el dominio estable donde usarás passkeys.
+2. En el deployment de Convex elegido, configura `CLERK_JWT_ISSUER_DOMAIN` y
+   el mismo `NARU_PAYMENTS_KEY` de Vercel. Cada deployment independiente de Convex
+   debe usar su propia cuenta patrocinadora para coordinar su secuencia.
+3. Despliega las funciones y el esquema de Convex antes de publicar la app.
+   Para hacerlo en cada build, configura `CONVEX_DEPLOY_KEY` en Vercel, selecciona
+   `app` como Root Directory y usa este Build Command:
+
+   ```bash
+   pnpm --dir ../backend exec convex deploy --cmd 'pnpm --dir ../app build' --cmd-url-env-var-name NEXT_PUBLIC_CONVEX_URL
+   ```
+
+   La clave debe corresponder al backend que usará la app. El comando inyecta su
+   URL en el build. Activa el acceso a los archivos fuera del Root Directory
+   para incluir los paquetes del workspace.
 
 ---
 

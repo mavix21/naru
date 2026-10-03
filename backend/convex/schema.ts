@@ -1,9 +1,37 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
-import { mentionValidator, personValidator, profileFields } from "./validators";
+import {
+  mentionValidator,
+  personValidator,
+  profileFields,
+  sponsorJobKind,
+  sponsorJobState,
+} from "./validators";
 
 export default defineSchema({
+  sponsorJobs: defineTable({
+    id: v.string(),
+    account: v.string(),
+    kind: sponsorJobKind,
+    state: sponsorJobState,
+    func: v.string(),
+    auth: v.string(),
+    expires: v.number(),
+    created: v.number(),
+    preparingUntil: v.union(v.number(), v.null()),
+    hash: v.union(v.string(), v.null()),
+    envelope: v.union(v.string(), v.null()),
+    ledger: v.union(v.number(), v.null()),
+    error: v.union(v.string(), v.null()),
+  })
+    .index("by_intent", ["id"])
+    .index("by_state", ["state"])
+    .index("by_account_kind", ["account", "kind", "created"]),
+  sponsorLimits: defineTable({
+    bucket: v.string(),
+    count: v.number(),
+  }).index("by_bucket", ["bucket"]),
   profiles: defineTable(profileFields)
     .index("by_clerk_user", ["clerkUserId"])
     .index("by_username", ["username"]),

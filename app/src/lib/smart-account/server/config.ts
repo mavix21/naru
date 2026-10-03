@@ -1,16 +1,9 @@
 import "server-only";
 import { Asset, hash, Keypair, StrKey } from "@stellar/stellar-sdk";
-import { isAbsolute } from "node:path";
 
 import { TESTNET, type SmartAccountConfig } from "../shared";
 
 export function serverConfig() {
-  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
-    throw new Error(
-      "This slice requires a single Node deployment with persistent SQLite storage, not ephemeral serverless functions.",
-    );
-  }
-
   const origin = new URL(
     process.env.NARU_SMART_ACCOUNT_ORIGIN || "http://localhost:3000",
   );
@@ -55,21 +48,6 @@ export function serverConfig() {
   if (recipient === sponsor.publicKey())
     throw new Error("Use a separate testnet recipient.");
 
-  const database =
-    process.env.NARU_SMART_ACCOUNT_DB ||
-    (process.env.NODE_ENV === "development"
-      ? ".naru-smart-account.sqlite"
-      : "");
-
-  if (
-    !database ||
-    (process.env.NODE_ENV !== "development" && !isAbsolute(database))
-  ) {
-    throw new Error(
-      "Set NARU_SMART_ACCOUNT_DB to an absolute path on persistent local storage (single Node deployment).",
-    );
-  }
-
   const publicConfig: SmartAccountConfig = {
     origin: origin.origin,
     rpId,
@@ -80,5 +58,5 @@ export function serverConfig() {
     fundingAmount: "5",
   };
 
-  return { sponsor, database, publicConfig };
+  return { sponsor, publicConfig };
 }
