@@ -11,7 +11,7 @@ import { z } from "zod";
 import type { PaymentState } from "@/lib/smart-account/payments";
 
 import { serverKey } from "@/lib/auth/server";
-import { displayAmount, parseAmount } from "@/lib/money";
+import { displayAmount, parseAmount, TESTNET_ASSETS } from "@/lib/money";
 import {
   fundPayment,
   readPaymentStatus,
@@ -20,6 +20,8 @@ import { SmartAccountService } from "@/lib/smart-account/server/service";
 import { TESTNET, TEST_FUNDING } from "@/lib/smart-account/shared";
 import { prepareSwapReview } from "@/lib/swaps/server";
 
+import type { DirectTransferRequest } from "./transfer-request";
+
 export function moneyTools(
   getToken: () => Promise<string>,
   messageId: string,
@@ -27,6 +29,7 @@ export function moneyTools(
   requests: FunctionReturnType<typeof api.splits.context>,
   userText: string,
   requireFundingAccess: () => Promise<void>,
+  directTransfer: DirectTransferRequest | null = null,
 ) {
   const requireSelected = (id: string) => {
     if (!selectedIds.has(id))
@@ -41,7 +44,7 @@ export function moneyTools(
   return {
     readBalance: tool({
       description:
-        "Show this authenticated user’s wallet: its full public address, copy button, actual Stellar Testnet XLM and official USDC balances, and free test-XLM funding button. Use for balance, wallet address, public key, receiving details, or how to find their wallet. The address is public and safe to show to its owner, not a private key or passkey. A null balance is unavailable, not zero. Never infer an address or balance from conversation text.",
+        "Show this authenticated user’s wallet: its full public address, copy button, actual Stellar Testnet XLM and official USDC balances, and free test-XLM funding button. Use for balance, wallet address, public key, receiving details, or how to find their wallet. Do not use as a prerequisite or substitute for a requested transfer: prepareTransfer checks balances and creates the confirmation card itself. The address is public and safe to show to its owner, not a private key or passkey. A null balance is unavailable, not zero. Never infer an address or balance from conversation text.",
       inputSchema: z.object({}).strict(),
       execute: async () => {
         const token = await getToken();
@@ -194,19 +197,33 @@ export function moneyTools(
     }),
     prepareTransfer: tool({
       description:
-        "Prepare ONE new direct transfer draft, only when explicitly requested. Never use this to pay a saved split request: use prepareRequestPayment so the server derives its exact terms and associates settlement. This cannot sign, confirm, or send money. XLM on Stellar testnet only; the user must use the card and passkey to send.",
+        "Prepare ONE direct XLM or official USDC transfer to a selected accepted friend on Stellar Testnet, only when explicitly requested. Never use this to pay a saved split request: use prepareRequestPayment. This only saves a review, even if the balance is insufficient or unavailable. The card shows the shortfall and offers a separate swap review for USDC. Never swap automatically. The user must explicitly authorize each swap and transfer separately with a passkey.",
       inputSchema: z
         .object({
-          userId: z.string().max(100),
-          amount: z.string().max(40),
-          asset: z.string().max(12),
+          userId: directTransfer?.userId
+            ? z.literal(directTransfer.userId)
+            : z.string().max(100),
+          amount: directTransfer
+            ? z.literal(directTransfer.amount)
+            : z.string().max(40),
+          asset: directTransfer
+            ? z.literal(directTransfer.asset)
+            : z.string().max(12),
         })
         .strict(),
       execute: async ({ userId, amount, asset }) => {
-        if (asset !== "XLM")
+        if (directTransfer && !directTransfer.userId)
           return {
             error:
-              "Only test XLM is supported. Ask whether the user wants an XLM transfer; do not substitute assets.",
+              "Select your friend from the @ menu, then send this request again. A typed name alone is not a verified recipient. No transfer was prepared.",
+            instruction:
+              "Ask the user to type @ and choose their friend from the suggestions. Never ask them for a user ID or account address.",
+          };
+
+        if (asset !== "XLM" && asset !== "USDC")
+          return {
+            error:
+              "Direct friend transfers support XLM and official Testnet USDC. Ask before changing assets.",
           };
         const token = await getToken();
         const payment = await fetchQuery(api.payments.current, {}, { token });
@@ -220,7 +237,7 @@ export function moneyTools(
           { token },
         );
 
-        const parsed = parseAmount(amount);
+        const parsed = parseAmount(amount, asset);
         const service = new SmartAccountService();
 
         await Promise.all([
@@ -228,12 +245,9 @@ export function moneyTools(
           service.requireAccount(recipient.account),
         ]);
 
-        if (
-          BigInt(await service.balance(payment.account)) < BigInt(parsed.units)
-        )
-          return {
-            error: "Insufficient test XLM balance. No transfer was prepared.",
-          };
+        // A draft can remain reviewable while funds are unavailable. A fresh
+        // on-chain balance is required again before review AND submission.
+        await readPaymentStatus(service, token, null).catch(() => null);
 
         const operationId = await fetchMutation(
           api.operations.prepare,
@@ -247,7 +261,8 @@ export function moneyTools(
             recipientProfileId: recipient.person.userId,
             recipientUsername: recipient.person.username,
             recipient: recipient.account,
-            token: service.config.publicConfig.token,
+            token: TESTNET_ASSETS[asset],
+            asset,
             ...parsed,
           },
           { token: await getToken() },
@@ -257,7 +272,7 @@ export function moneyTools(
           operationId,
           status: "awaiting_approval",
           instruction:
-            "Read the live operation card. Nothing has been sent. Confirm and authorize with a passkey there.",
+            "Show the live transfer card with one short review invitation. Nothing has been sent. Its balance check may show a shortfall; do not call prepareSwap or send automatically. Each needs separate review and passkey authorization.",
         };
       },
     }),

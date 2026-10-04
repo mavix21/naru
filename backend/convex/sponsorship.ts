@@ -267,7 +267,8 @@ export const pending = mutation({
       job.state !== "preparing" ||
       job.preparingUntil === null ||
       job.preparingUntil <= Date.now() ||
-      (job.kind === "swap" && job.expires <= Date.now())
+      ((job.kind === "swap" || job.kind === "transfer") &&
+        job.expires <= Date.now())
     )
       throw new ConvexError("Submission reservation was lost.");
 

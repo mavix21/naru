@@ -12,7 +12,7 @@ import { z } from "zod";
 
 import type { SwapIntent, SwapReview } from "@/lib/swaps/shared";
 
-import { parseAmount } from "@/lib/money";
+import { parseAmount, TESTNET_ASSETS, type TransferAsset } from "@/lib/money";
 import { assertFreshSwap, validateSwapAuthorization } from "@/lib/swaps/policy";
 
 import {
@@ -565,6 +565,7 @@ export class NaruSmartAccount {
       token: string;
       amount: string;
       units: string;
+      asset: TransferAsset;
     },
   ) {
     const account = await this.account();
@@ -574,9 +575,10 @@ export class NaruSmartAccount {
       review.account !== account ||
       review.recipient !== expected.recipient ||
       review.token !== expected.token ||
-      review.token !== this.config.token ||
+      review.token !== TESTNET_ASSETS[expected.asset] ||
+      review.asset !== expected.asset ||
       review.amount !== expected.amount ||
-      parseAmount(review.amount).units !== expected.units ||
+      parseAmount(review.amount, expected.asset).units !== expected.units ||
       review.expiresAt <= Date.now()
     )
       throw new Error(

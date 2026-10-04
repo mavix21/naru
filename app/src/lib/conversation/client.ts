@@ -8,7 +8,8 @@ type RequestBody = {
     | "edit"
     | "fund"
     | "request"
-    | "quote";
+    | "quote"
+    | "retry";
   requestId?: string;
   id?: string;
   revision?: number;

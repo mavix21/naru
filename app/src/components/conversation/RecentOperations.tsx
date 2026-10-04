@@ -34,7 +34,7 @@ export function RecentOperations({
                     : `↗ ${operation.recipientName}`}
                 </span>
                 <span className="shrink-0 tabular-nums">
-                  {operation.amount} XLM
+                  {operation.amount} {operation.asset}
                 </span>
               </span>
               <span className="mt-1 block text-[11px] text-muted-foreground">

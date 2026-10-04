@@ -1,5 +1,15 @@
 import { v } from "convex/values";
 
+export const transferAsset = v.union(v.literal("XLM"), v.literal("USDC"));
+
+export const walletBalances = v.object({
+  account: v.string(),
+  balance: v.union(v.string(), v.null()),
+  balanceError: v.union(v.string(), v.null()),
+  usdcBalance: v.union(v.string(), v.null()),
+  usdcBalanceError: v.union(v.string(), v.null()),
+});
+
 export const sponsorJobKind = v.union(
   v.literal("deploy"),
   v.literal("fund"),

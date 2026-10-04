@@ -678,7 +678,9 @@ export function Conversation({
                                     userId={userId}
                                     onUpdate={onOperationUpdate}
                                     onEditRecipient={(amount) => {
-                                      updateDraft(`Send ${amount} XLM to `);
+                                      updateDraft(
+                                        `Send ${amount} ${operation.asset} to `,
+                                      );
                                       composer.current?.focus();
                                     }}
                                   />

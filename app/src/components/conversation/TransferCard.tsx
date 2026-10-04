@@ -2,7 +2,10 @@
 
 import type { Doc } from "@naru/backend/data-model";
 
+import { api } from "@naru/backend/api";
 import { IconExternalLink, IconReceipt } from "@tabler/icons-react";
+import { useQuery } from "convex/react";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import {
@@ -15,8 +18,10 @@ import {
 } from "@/components/ui/attachment";
 import { Button } from "@/components/ui/button";
 import { Marker, MarkerContent } from "@/components/ui/marker";
+import { useAccountStatus } from "@/hooks/useAccountStatus";
+import { useMessageDraft } from "@/hooks/useMessageDraft";
 import { conversationRequest } from "@/lib/conversation/client";
-import { parseAmount } from "@/lib/money";
+import { parseAmount, transferShortfall } from "@/lib/money";
 import { reviewSchema } from "@/lib/smart-account/shared";
 
 type TransferResponse = { operation: Doc<"operations">; review?: unknown };
@@ -45,11 +50,24 @@ export function TransferCard({
   const [editing, setEditing] = useState(false);
   const [amount, setAmount] = useState(operation.amount);
   const editable = operation.state === "awaiting_approval";
+  const wallet = useQuery(api.payments.current);
+  const walletQuery = useAccountStatus(userId);
+  const { updateDraft } = useMessageDraft(userId);
+  const router = useRouter();
 
-  async function action(kind: "cancel" | "edit" | "review") {
+  const balance = walletQuery.isError
+    ? null
+    : operation.asset === "USDC"
+      ? (wallet?.usdcBalance ?? null)
+      : (wallet?.balance ?? null);
+
+  const shortfall = transferShortfall(operation.units, balance);
+
+  async function action(kind: "cancel" | "edit" | "review" | "retry") {
     if (busy) return;
     setError(undefined);
     setBusy(kind === "review" ? "Opening your passkey…" : "Saving…");
+    let submissionStarted = false;
 
     try {
       if (kind === "review") {
@@ -91,6 +109,7 @@ export function TransferCard({
             setBusy("Authorize on your device…");
             const auth = await account.signTransfer(review, operation);
             setBusy("Submitting authorized transfer…");
+            submissionStarted = true;
 
             const result = await conversationRequest<TransferResponse>(
               userId,
@@ -115,7 +134,10 @@ export function TransferCard({
             action: kind,
             id: operation._id,
             revision: operation.revision,
-            amount: kind === "edit" ? parseAmount(amount).amount : undefined,
+            amount:
+              kind === "edit"
+                ? parseAmount(amount, operation.asset).amount
+                : undefined,
           },
         );
 
@@ -124,43 +146,46 @@ export function TransferCard({
       }
     } catch (cause) {
       setError(
-        cause instanceof Error &&
-          /cancel|NotAllowed|denied|timed out/i.test(
-            `${cause.name} ${cause.message}`,
-          )
-          ? "Passkey not authorized. Check the card’s status before trying again."
-          : cause instanceof Error
-            ? cause.message
-            : "Couldn’t finish. Check the transfer’s status.",
+        submissionStarted
+          ? "Couldn’t confirm submission. Check this transfer’s status before trying again."
+          : cause instanceof Error &&
+              /cancel|NotAllowed|denied|timed out/i.test(
+                `${cause.name} ${cause.message}`,
+              )
+            ? "Passkey not authorized. Check the card’s status before trying again."
+            : cause instanceof Error
+              ? cause.message
+              : "Couldn’t finish. Check the transfer’s status.",
       );
     } finally {
       setBusy(undefined);
       void conversationRequest(userId, "/api/transfers").catch(() => {});
+      void walletQuery.refetch();
     }
   }
 
   return (
     <article
       aria-label={`Transfer to ${operation.recipientName}`}
-      className="my-5 overflow-hidden rounded-3xl border border-border/80 bg-card shadow-xs"
+      className="my-4 w-full max-w-sm overflow-hidden rounded-3xl border border-border/70 bg-card shadow-xs"
     >
-      <div className="p-5 md:p-6">
-        <div className="mb-5 flex items-center justify-between gap-3 text-[10px] font-medium tracking-wider uppercase text-muted-foreground">
+      <div className="p-4 sm:p-5">
+        <div className="mb-4 flex items-center justify-between gap-3 text-sm font-medium">
           <span>
-            {operation.requestId ? "Paying your share" : "Sending money"}{" "}
+            {operation.requestId ? "Paying your share" : "Send money"}{" "}
             <span aria-hidden="true">↗</span>
           </span>
-          <span className="rounded-full border px-2.5 py-1 tracking-normal normal-case">
-            Stellar testnet
+          <span className="rounded-full bg-muted px-2 py-1 text-[10px] font-normal text-muted-foreground">
+            Testnet
           </span>
         </div>
-        <p className="text-[34px] leading-tight tracking-[-.05em] tabular-nums">
+        <p className="break-all text-3xl leading-tight tracking-[-.04em] tabular-nums">
           {operation.amount}{" "}
           <span className="text-lg tracking-normal text-muted-foreground">
             {operation.asset}
           </span>
         </p>
-        <p className="mt-4 text-sm">
+        <p className="mt-3 text-sm">
           To <span className="font-medium">{operation.recipientName}</span>
         </p>
         <p className="mt-1 break-all text-xs text-muted-foreground">
@@ -171,15 +196,18 @@ export function TransferCard({
         <p className="mt-2 text-[11px] text-muted-foreground">
           <span aria-hidden="true">✓ </span>
           {operation.recipientProfileId
-            ? "Accepted friend · verified associated Naru account"
+            ? "Accepted friend · activated account"
             : "Verified registered Naru account"}
         </p>
         <details className="mt-4 text-[11px] text-muted-foreground">
-          <summary className="cursor-pointer">Account & sponsorship</summary>
+          <summary className="cursor-pointer">
+            Details · fees paid by Naru
+          </summary>
           <p className="mt-2 break-all font-mono">{operation.recipient}</p>
           <p className="mt-2 leading-relaxed">
             Naru sponsors network fees, capped at 0.5 test XLM. You send exactly{" "}
-            {operation.amount} XLM. Test funds have no real monetary value.
+            {operation.amount} {operation.asset}. Test funds have no real
+            monetary value.
           </p>
         </details>
         <Marker render={<output />} className="mt-5">
@@ -187,6 +215,45 @@ export function TransferCard({
             {busy || operationLabels[operation.state]}
           </MarkerContent>
         </Marker>
+        {editable && shortfall !== "0" && (
+          <output className="mt-3 block space-y-2 text-xs text-muted-foreground">
+            <p>
+              {shortfall === null
+                ? `${operation.asset} balance unavailable. Refresh before sending.`
+                : `You need ${shortfall} more ${operation.asset}.`}
+            </p>
+            {shortfall !== null && operation.asset === "USDC" && (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={!!busy}
+                  onClick={() => {
+                    updateDraft(
+                      `Swap enough XLM to receive ${shortfall} USDC. Prepare a quote for me to review.`,
+                      [],
+                    );
+                    router.push("/home");
+                  }}
+                >
+                  Get USDC with a swap ↗
+                </Button>
+                <p>
+                  Review and authorize the swap first, then return to approve
+                  this transfer.
+                </p>
+              </>
+            )}
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={walletQuery.isFetching || !!busy}
+              onClick={() => void walletQuery.refetch()}
+            >
+              {walletQuery.isFetching ? "Refreshing…" : "Refresh balance"}
+            </Button>
+          </output>
+        )}
         {(error || operation.error) && (
           <p
             role="alert"
@@ -201,7 +268,11 @@ export function TransferCard({
               <IconReceipt aria-hidden="true" />
             </AttachmentMedia>
             <AttachmentContent>
-              <AttachmentTitle>Transaction details</AttachmentTitle>
+              <AttachmentTitle>
+                {operation.state === "confirmed"
+                  ? "Confirmed receipt"
+                  : "Transaction status"}
+              </AttachmentTitle>
               <AttachmentDescription>
                 {operation.hash.slice(0, 8)}…{operation.hash.slice(-6)} ·
                 Stellar Expert
@@ -225,7 +296,7 @@ export function TransferCard({
         )}
       </div>
       {editable && (
-        <div className="border-t bg-muted/25 px-5 py-4 md:px-6">
+        <div className="border-t bg-muted/25 px-4 py-3 sm:px-5">
           {editing ? (
             <form
               onSubmit={(event) => {
@@ -234,7 +305,7 @@ export function TransferCard({
               }}
             >
               <label className="text-xs" htmlFor={`amount-${operation._id}`}>
-                Exact amount · XLM
+                Exact amount · {operation.asset}
               </label>
               <input
                 id={`amount-${operation._id}`}
@@ -305,7 +376,8 @@ export function TransferCard({
             <div className="flex flex-wrap items-center gap-2">
               <Button
                 type="button"
-                disabled={!!busy}
+                className="w-full"
+                disabled={!!busy || shortfall !== "0"}
                 onClick={() => void action("review")}
               >
                 Confirm with passkey
@@ -335,6 +407,18 @@ export function TransferCard({
               </Button>
             </div>
           )}
+        </div>
+      )}
+      {operation.state === "failed" && !operation.requestId && (
+        <div className="border-t px-5 py-4">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!!busy}
+            onClick={() => void action("retry")}
+          >
+            Review again
+          </Button>
         </div>
       )}
     </article>

@@ -1,8 +1,10 @@
+import { createThread } from "@convex-dev/agent";
+import agentTest from "@convex-dev/agent/test";
 /// <reference types="vite/client" />
 import { convexTest } from "convex-test";
 import { beforeEach, describe, expect, it } from "vitest";
 
-import { api } from "../convex/_generated/api";
+import { api, components } from "../convex/_generated/api";
 import schema from "../convex/schema";
 
 const modules = import.meta.glob("../convex/**/*.{js,ts}");
@@ -14,10 +16,14 @@ beforeEach(() => {
 
 async function setup() {
   const t = convexTest(schema, modules);
+  agentTest.register(t);
   const owner = t.withIdentity({ subject: "owner" });
   const expires = Date.now() + 120_000;
   await t.run(async (ctx) => {
     await ctx.db.insert("conversations", {
+      agentThreadId: await createThread(ctx, components.agent, {
+        userId: "owner",
+      }),
       clerkUserId: "owner",
       sequence: 1,
       activeTurn: "turn",

@@ -8,6 +8,7 @@ import {
   sponsorJobKind,
   sponsorJobState,
   swapTerms,
+  transferAsset,
 } from "./validators";
 
 export default defineSchema({
@@ -159,6 +160,13 @@ export default defineSchema({
         requestId: v.optional(v.id("paymentRequests")),
         splitId: v.optional(v.id("splits")),
         text: v.optional(v.string()),
+        transfer: v.optional(
+          v.object({
+            amount: v.string(),
+            asset: transferAsset,
+            hash: v.string(),
+          }),
+        ),
       }),
     ),
   })
@@ -175,7 +183,7 @@ export default defineSchema({
     requestId: v.optional(v.id("paymentRequests")),
     account: v.string(),
     recipient: v.string(),
-    asset: v.literal("XLM"),
+    asset: transferAsset,
     token: v.string(),
     amount: v.string(),
     units: v.string(),
@@ -196,6 +204,7 @@ export default defineSchema({
   })
     .index("by_owner", ["clerkUserId"])
     .index("by_owner_state", ["clerkUserId", "state"])
+    .index("by_recipient_state", ["recipientUserId", "state"])
     .index("by_turn", ["clerkUserId", "messageId"])
     .index("by_hash", ["hash"]),
   payments: defineTable({

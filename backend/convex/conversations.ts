@@ -29,10 +29,10 @@ function find(ctx: QueryCtx, user: string) {
     .unique();
 }
 
-// Called in the same transaction that records a verified swap confirmation.
+// Called in the same transaction that records a verified payment confirmation.
 // Reuse the balance tool's saved-message format so the existing card renders
 // immediately and the completion remains in the companion's conversation.
-export async function appendSwapConfirmation(
+export async function appendOperationConfirmation(
   ctx: MutationCtx,
   operation: Doc<"operations">,
 ) {
@@ -40,7 +40,8 @@ export async function appendSwapConfirmation(
 
   if (!conversation?.agentThreadId)
     throw new ConvexError("Saved agent thread not found.");
-  const messageId = `swap-confirmed-${operation._id}`;
+  const kind = operation.swap ? "swap" : "transfer";
+  const messageId = `${kind}-confirmed-${operation._id}`;
 
   const existing = await ctx.db
     .query("messages")
@@ -60,8 +61,8 @@ export async function appendSwapConfirmation(
     .unique();
 
   if (wallet?.state !== "ready" || wallet.account !== operation.account)
-    throw new ConvexError("The swap's wallet balance is unavailable.");
-  const toolCallId = `swap-balance-${operation._id}`;
+    throw new ConvexError("The payment's wallet balance is unavailable.");
+  const toolCallId = `${kind}-balance-${operation._id}`;
   const sequence = conversation.sequence + 1;
 
   const saved = await saveMessages(ctx, components.agent, {
@@ -73,7 +74,12 @@ export async function appendSwapConfirmation(
       {
         role: "assistant",
         content: [
-          { type: "text", text: "Done — your swap is complete." },
+          {
+            type: "text",
+            text: operation.swap
+              ? "Done — your swap is complete."
+              : `Done — ${operation.amount} ${operation.asset} sent to ${operation.recipientUsername ? `@${operation.recipientUsername}` : operation.recipientName}.`,
+          },
           { type: "tool-call", toolCallId, toolName: "readBalance", input: {} },
         ],
       },

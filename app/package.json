@@ -15,6 +15,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:swap:e2e": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/validate-swap.mjs",
+    "test:transfer:e2e": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/validate-transfer.mjs",
     "swaps:check": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --conditions=react-server --import tsx scripts/check-swap-market.ts"
   },
   "dependencies": {

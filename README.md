@@ -62,7 +62,7 @@ adicionales forman parte de la visión del producto.**
    recibir 5 XLM de prueba.
 3. **Conecta con otra persona:** en **People**, elige tu nombre de usuario,
    busca el suyo y envía una invitación. La otra persona debe aceptarla.
-4. **Conversa:** consulta tu saldo, pide «Envía 1 XLM a @ana» o prepara un gasto
+4. **Conversa:** consulta tu saldo, pide «Envía 1 USDC a @ana» (también XLM) o prepara un gasto
    compartido. Selecciona a la persona desde el menú de `@`.
 5. **Autoriza y sigue el resultado:** revisa la tarjeta y confirma el pago con
    tu passkey. El estado se actualiza y puedes consultar la transacción en el
@@ -232,6 +232,42 @@ Para repetir la prueba real, inicia `pnpm --dir app dev`, instala Chromium con
 El script usa Clerk Development y localhost, crea o reutiliza una cuenta de
 prueba, y ejecuta un swap de 1 XLM con una passkey virtual. Guarda capturas y
 el estado privado del navegador/passkey en ese directorio; no lo publiques.
+
+### Enviar USDC a amigos en Testnet
+
+Selecciona un amigo aceptado con `@` y pide **“Send 1 USDC to @ana”**. Ambos
+deben tener pagos activados. La tarjeta muestra destinatario, importe y activo;
+**Confirm with passkey** autoriza únicamente esa transferencia. Reutiliza el
+USDC oficial y su precisión de 7 decimales descritos arriba (`1 USDC = 10000000`
+unidades), cuentas inteligentes, comisiones patrocinadas y reconciliación.
+
+Si falta USDC, la tarjeta indica el déficit y **Get USDC with a swap** prepara
+el texto para solicitar el swap existente. El usuario revisa y autoriza el swap,
+y después vuelve a revisar y autorizar el envío. Ninguno se ejecuta automáticamente.
+Los saldos no disponibles bloquean la autorización hasta refrescarlos. Un envío
+pendiente conserva su hash; **Review again** solo reabre un fallo definitivo.
+El recibo y la notificación del destinatario se publican únicamente tras
+confirmación on-chain, junto con la actualización de los saldos de ambos usuarios.
+
+**Validación real del 4 de octubre de 2026:** dos usuarios de Clerk Development,
+amistad aceptada y cuentas activadas con passkeys virtuales en Chromium. Se
+envió **1 USDC**; el saldo del emisor pasó de 1 a 0 USDC y el del destinatario
+de 0 a 1 USDC. Ningún saldo XLM de los usuarios cambió. RPC confirmó `SUCCESS`
+en el ledger **5025813**, con una sola operación y una sola entrada de autorización:
+
+[bbd304a78c00956c79a9706f2f3f2e00b0bbdcd7130c18216841b8f5c09f88ea](https://stellar.expert/explorer/testnet/tx/bbd304a78c00956c79a9706f2f3f2e00b0bbdcd7130c18216841b8f5c09f88ea).
+
+También se verificaron rechazo de passkey sin envío, recarga del borrador,
+notificación y recibo del destinatario, y reenvío de la autorización sin un
+segundo débito. El déficit se cubrió previamente mediante un swap revisado y
+autorizado por separado:
+[f9c39c78b684f55a659fe1fe94238a49edac100e984bbabe933fbf01c637eb98](https://stellar.expert/explorer/testnet/tx/f9c39c78b684f55a659fe1fe94238a49edac100e984bbabe933fbf01c637eb98).
+
+Pruebas enfocadas: `pnpm --dir app test` y `pnpm --dir backend test`.
+Para repetir la validación con la app local y Chromium instalado:
+`NARU_TRANSFER_E2E_DIR=/ruta/privada/fuera/del/repo pnpm --dir app test:transfer:e2e`.
+El script guarda el resultado público en `result.json` y el navegador/passkeys
+privados en ese directorio. Usa un directorio nuevo para otra transferencia.
 
 ## Desplegar en Vercel
 

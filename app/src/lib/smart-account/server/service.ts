@@ -10,13 +10,17 @@ import {
   scValToBigInt,
   Transaction,
   TransactionBuilder,
-  nativeToScVal,
   xdr,
 } from "@stellar/stellar-sdk";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 
-import { parseAmount } from "@/lib/money";
+import {
+  parseAmount,
+  TESTNET_ASSETS,
+  transferShortfall,
+  type TransferAsset,
+} from "@/lib/money";
 import { SWAP } from "@/lib/swaps/shared";
 
 import type { Deployment } from "../payments";
@@ -29,6 +33,7 @@ import {
   type Job,
   type TransferReview,
 } from "../shared";
+import { transferFunction } from "../transfer";
 import { serverConfig } from "./config";
 import { buildFundingTransfer } from "./funding";
 import {
@@ -38,31 +43,17 @@ import {
 } from "./policy";
 import { readContract, stellarRpc } from "./rpc";
 import { SponsorStore, type RecordEntry } from "./store";
+import {
+  validateTransferAuthorization,
+  validateTransferEnvelope,
+  type TransferIntent,
+} from "./transfer-policy";
 
 export { stellarRpc } from "./rpc";
 
 const server = stellarRpc;
 
 const MAX_FEE_STROOPS = BigInt(5_000_000); // 0.5 test XLM, including resource fees
-
-function transferFunction(
-  token: string,
-  from: string,
-  to: string,
-  amount: bigint,
-) {
-  return xdr.HostFunction.hostFunctionTypeInvokeContract(
-    new xdr.InvokeContractArgs({
-      contractAddress: Address.fromString(token).toScAddress(),
-      functionName: "transfer",
-      args: [
-        Address.fromString(from).toScVal(),
-        Address.fromString(to).toScVal(),
-        nativeToScVal(amount, { type: "i128" }),
-      ],
-    }),
-  );
-}
 
 export class SmartAccountService {
   config = serverConfig();
@@ -176,6 +167,53 @@ export class SmartAccountService {
       );
 
     return this.balance(account, SWAP.usdc);
+  }
+
+  async requireTransferBalance(
+    account: string,
+    asset: TransferAsset,
+    units: string,
+  ) {
+    let balance: string;
+
+    try {
+      balance =
+        asset === "USDC"
+          ? await this.usdcBalance(account)
+          : await this.balance(account);
+    } catch {
+      throw new Error(
+        `${asset} balance is unavailable. Refresh and try again; nothing was sent.`,
+      );
+    }
+
+    const shortfall = transferShortfall(units, balance);
+
+    if (shortfall !== "0")
+      throw new Error(
+        `You need ${shortfall} more ${asset}. ${asset === "USDC" ? "Review an XLM → USDC swap first, then authorize this transfer separately." : "Add test XLM or choose a smaller amount."}`,
+      );
+  }
+
+  async walletBalances(account: string) {
+    const [xlm, usdc] = await Promise.allSettled([
+      this.balance(account),
+      this.usdcBalance(account),
+    ]);
+
+    return {
+      account,
+      balance: xlm.status === "fulfilled" ? xlm.value : null,
+      balanceError:
+        xlm.status === "fulfilled"
+          ? null
+          : "XLM balance is unavailable. Please refresh.",
+      usdcBalance: usdc.status === "fulfilled" ? usdc.value : null,
+      usdcBalanceError:
+        usdc.status === "fulfilled"
+          ? null
+          : "USDC balance is unavailable. Please refresh.",
+    };
   }
 
   async requireAccount(account: string) {
@@ -455,20 +493,23 @@ export class SmartAccountService {
 
   async review(
     account: string,
-    transfer = { recipient: this.config.publicConfig.recipient, amount: "0.1" },
+    transfer: { recipient: string; amount: string; asset?: TransferAsset } = {
+      recipient: this.config.publicConfig.recipient,
+      amount: "0.1",
+    },
   ): Promise<TransferReview> {
     await this.store.rate(
       `review:${new Date().toISOString().slice(0, 10)}`,
       100,
     );
     await this.requireAccount(account);
-    const { units, amount } = parseAmount(transfer.amount);
-
-    if (BigInt(await this.balance(account)) < BigInt(units))
-      throw new Error("Insufficient test XLM. Fund the account first.");
+    const asset = transfer.asset ?? "XLM";
+    const token = TESTNET_ASSETS[asset];
+    const { units, amount } = parseAmount(transfer.amount, asset);
+    await this.requireTransferBalance(account, asset, units);
 
     const func = transferFunction(
-      this.config.publicConfig.token,
+      token,
       account,
       transfer.recipient,
       BigInt(units),
@@ -490,19 +531,12 @@ export class SmartAccountService {
       );
     const entry = simulation.result.auth[0];
 
-    if (
-      Address.fromScAddress(addressCredentials(entry).address()).toString() !==
-        account ||
-      entry.rootInvocation().subInvocations().length !== 0 ||
-      !entry
-        .rootInvocation()
-        .function()
-        .contractFn()
-        .toXDR()
-        .equals(func.invokeContract().toXDR())
-    ) {
-      throw new Error("Simulation did not match the reviewed transfer.");
-    }
+    validateTransferAuthorization(entry, {
+      account,
+      recipient: transfer.recipient,
+      token,
+      units,
+    });
 
     const expiration = simulation.latestLedger + 60;
     addressCredentials(entry).signatureExpirationLedger(expiration);
@@ -523,7 +557,8 @@ export class SmartAccountService {
       id,
       account,
       recipient: transfer.recipient,
-      token: this.config.publicConfig.token,
+      token,
+      asset,
       amount,
       auth,
       expiration,
@@ -531,7 +566,7 @@ export class SmartAccountService {
     };
   }
 
-  async authorize(id: string, authXdr: string) {
+  async authorize(id: string, authXdr: string, expected?: TransferIntent) {
     const job = await this.store.get(id);
 
     if (!job || job.kind !== "transfer")
@@ -540,7 +575,27 @@ export class SmartAccountService {
     if (job.state !== "review") return this.reconcile(job);
     const auth = validateSignedAuthorization(job.auth, authXdr);
 
-    return this.submit(job, [auth]);
+    if (expected) {
+      this.assertTransfer(job, expected);
+      validateTransferAuthorization(auth, expected);
+    }
+
+    return this.submit(
+      job,
+      [auth],
+      expected
+        ? (tx) => {
+            validateTransferEnvelope(
+              tx.toXDR(),
+              tx.hash().toString("hex"),
+              this.config.publicConfig.sponsor,
+              expected,
+              job.auth,
+              job.expires,
+            );
+          }
+        : undefined,
+    );
   }
 
   assertTransfer(
@@ -560,7 +615,6 @@ export class SmartAccountService {
     );
 
     if (
-      expected.token !== this.config.publicConfig.token ||
       job.kind !== "transfer" ||
       job.account !== expected.account ||
       job.func !== func.toXDR("base64")
@@ -569,27 +623,20 @@ export class SmartAccountService {
         "Transaction intent does not match the exact saved payment.",
       );
 
+    validateTransferAuthorization(
+      xdr.SorobanAuthorizationEntry.fromXDR(job.auth, "base64"),
+      expected,
+    );
+
     if (job.envelope) {
-      const transaction = TransactionBuilder.fromXDR(
+      validateTransferEnvelope(
         job.envelope,
-        TESTNET.networkPassphrase,
+        job.hash,
+        this.config.publicConfig.sponsor,
+        expected,
+        job.auth,
+        job.expires,
       );
-
-      if (
-        !(transaction instanceof Transaction) ||
-        transaction.hash().toString("hex") !== job.hash ||
-        transaction.operations.length !== 1
-      )
-        throw new Error("Transaction evidence does not match this payment.");
-      const operation = transaction.operations[0];
-
-      if (
-        operation.type !== "invokeHostFunction" ||
-        !operation.func.toXDR().equals(func.toXDR())
-      )
-        throw new Error(
-          "Confirmed invocation does not match the requested transfer.",
-        );
     } else if (job.state === "confirmed")
       throw new Error("Confirmed envelope missing.");
   }
@@ -623,7 +670,9 @@ export class SmartAccountService {
       const transaction = await this.transaction(
         xdr.HostFunction.fromXDR(job.func, "base64"),
         auth,
-        job.kind === "swap" ? Math.floor(job.expires / 1000) : undefined,
+        job.kind === "swap" || job.kind === "transfer"
+          ? Math.floor(job.expires / 1000)
+          : undefined,
       );
 
       // Enforce passkey/deployer signatures BEFORE spending sponsor fees. Then

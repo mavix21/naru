@@ -1,5 +1,38 @@
 export const ASSET = "XLM" as const;
 
+export type TransferAsset = "XLM" | "USDC";
+
+// The verified Testnet SAC identities originally pinned by the swap flow.
+// Both assets use seven decimals on Stellar (including USDC).
+export const TESTNET_ASSETS = {
+  XLM: "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC",
+  USDC: "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA",
+  usdcIssuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+} as const;
+
+export function assertTransferAmount(value: {
+  asset: TransferAsset;
+  token: string;
+  amount: string;
+  units: string;
+}) {
+  const parsed = parseAmount(value.amount, value.asset);
+
+  if (
+    value.token !== TESTNET_ASSETS[value.asset] ||
+    parsed.units !== value.units ||
+    parsed.amount !== value.amount
+  )
+    throw new Error("The asset or amount does not match the saved transfer.");
+}
+
+export function transferShortfall(units: string, balance: string | null) {
+  if (balance === null) return null;
+  const missing = BigInt(units) - BigInt(balance);
+
+  return missing > BigInt(0) ? displayAmount(missing.toString()) : "0";
+}
+
 const SCALE = BigInt(10_000_000);
 
 const MAX = (BigInt(1) << BigInt(127)) - BigInt(1);

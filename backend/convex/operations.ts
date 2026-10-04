@@ -4,7 +4,8 @@ import type { Id } from "./_generated/dataModel";
 
 import { mutation, query, type QueryCtx } from "./_generated/server";
 import { requireServer, requireUser } from "./access";
-import { appendSwapConfirmation } from "./conversations";
+import { appendOperationConfirmation } from "./conversations";
+import { assertTransferAmount, parseAmount } from "./money";
 import {
   deliver,
   profileFor,
@@ -14,7 +15,7 @@ import {
   throttle,
 } from "./socialShared";
 import { requestAccess } from "./splits";
-import { swapTerms } from "./validators";
+import { swapTerms, transferAsset, walletBalances } from "./validators";
 
 async function owned(ctx: QueryCtx, id: Id<"operations">) {
   const row = await ctx.db.get(id);
@@ -92,7 +93,16 @@ async function incomingPending(ctx: QueryCtx) {
     .withIndex("by_owner", (q) => q.eq("clerkUserId", user))
     .collect();
 
-  const operations = [];
+  const direct = await ctx.db
+    .query("operations")
+    .withIndex("by_recipient_state", (q) =>
+      q.eq("recipientUserId", user).eq("state", "submitting"),
+    )
+    .collect();
+
+  const operations = direct.filter(
+    (row) => !row.swap && !row.requestId && row.recipientProfileId,
+  );
 
   for (const split of splits) {
     if (split.state !== "sent") continue;
@@ -175,6 +185,7 @@ export const prepare = mutation({
     token: v.string(),
     amount: v.string(),
     units: v.string(),
+    asset: v.optional(transferAsset),
   },
   handler: async (ctx, args) => {
     requireServer(args.key);
@@ -229,23 +240,28 @@ export const prepare = mutation({
     if (
       sender?.state !== "ready" ||
       sender.account !== args.account ||
+      !sender.credentialId ||
+      !sender.publicKey ||
       recipient?.state !== "ready" ||
       recipient.account !== args.recipient ||
+      !recipient.credentialId ||
+      !recipient.publicKey ||
+      sender.account === recipient.account ||
       user === args.recipientUserId
     )
       throw new ConvexError("Both Naru payment accounts must be active.");
 
-    if (
-      !/^[1-9]\d{0,37}$/.test(args.units) ||
-      BigInt(args.units) > (BigInt(1) << BigInt(127)) - BigInt(1)
-    )
-      throw new ConvexError("Invalid asset units.");
+    const asset = args.asset ?? "XLM";
+    assertTransferAmount({ ...args, asset });
     const { key: _key, ...fields } = args;
+    const person = await publicPerson(ctx, args.recipientProfileId);
 
     return ctx.db.insert("operations", {
       ...fields,
       clerkUserId: user,
-      asset: "XLM",
+      asset,
+      recipientName: person.displayName,
+      recipientUsername: person.username,
       revision: 1,
       state: "awaiting_approval",
       reviewId: null,
@@ -480,6 +496,7 @@ export const change = mutation({
         units: v.string(),
       }),
       v.object({ kind: v.literal("cancel") }),
+      v.object({ kind: v.literal("retry") }),
       v.object({ kind: v.literal("bind"), reviewId: v.string() }),
       v.object({ kind: v.literal("submit"), reviewId: v.string() }),
       v.object({
@@ -493,6 +510,9 @@ export const change = mutation({
         hash: v.union(v.string(), v.null()),
         error: v.union(v.string(), v.null()),
         receivedUnits: v.optional(v.string()),
+        balances: v.optional(
+          v.object({ sender: walletBalances, recipient: walletBalances }),
+        ),
       }),
     ),
   },
@@ -509,11 +529,18 @@ export const change = mutation({
 
       // An organizer's server may reconcile evidence, never review or authorize
       // another person's operation. All reports still require the server key.
+      const incomingDirect =
+        !row.swap &&
+        !row.requestId &&
+        row.recipientProfileId &&
+        row.recipientUserId === user;
+
       if (
         args.action.kind !== "report" ||
-        !request ||
-        request.operationId !== row._id ||
-        split?.clerkUserId !== user
+        (!incomingDirect &&
+          (!request ||
+            request.operationId !== row._id ||
+            split?.clerkUserId !== user))
       )
         throw new ConvexError("Operation not found.");
     }
@@ -556,6 +583,89 @@ export const change = mutation({
         "This review changed. Read the updated card before confirming.",
       );
 
+    // Recheck friendship and both linked accounts atomically with the claim.
+    // Old XLM records without a social profile remain readable/reconcilable.
+    if (
+      !row.swap &&
+      (action.kind === "bind" ||
+        action.kind === "submit" ||
+        action.kind === "retry")
+    ) {
+      assertTransferAmount(row);
+
+      if (row.asset === "USDC" && (!row.recipientProfileId || row.requestId))
+        throw new ConvexError("USDC transfers require an accepted friend.");
+
+      if (row.recipientProfileId) {
+        const me = await socialUser(ctx);
+        await requireFriend(ctx, me._id, row.recipientProfileId);
+        const profile = await ctx.db.get(row.recipientProfileId);
+
+        const [sender, recipient] = await Promise.all([
+          payment(ctx, row.clerkUserId),
+          payment(ctx, row.recipientUserId),
+        ]);
+
+        if (
+          profile?.clerkUserId !== row.recipientUserId ||
+          sender?.state !== "ready" ||
+          sender.account !== row.account ||
+          recipient?.state !== "ready" ||
+          recipient.account !== row.recipient ||
+          !recipient.credentialId ||
+          !recipient.publicKey ||
+          !sender.credentialId ||
+          !sender.publicKey
+        )
+          throw new ConvexError(
+            "The verified payment accounts changed. Review a new transfer.",
+          );
+      }
+
+      if (action.kind !== "retry") {
+        const job = await ctx.db
+          .query("sponsorJobs")
+          .withIndex("by_intent", (q) => q.eq("id", action.reviewId))
+          .unique();
+
+        if (
+          !job ||
+          job.kind !== "transfer" ||
+          job.account !== row.account ||
+          job.state !== "review" ||
+          job.expires <= Date.now()
+        )
+          throw new ConvexError("Transfer review expired. Review again.");
+      }
+    }
+
+    if (action.kind === "retry") {
+      if (row.swap || row.requestId || row.state !== "failed" || !row.reviewId)
+        throw new ConvexError(
+          "Only a definitively failed direct transfer can be reviewed again.",
+        );
+
+      const evidence = await ctx.db
+        .query("sponsorJobs")
+        .withIndex("by_intent", (q) => q.eq("id", row.reviewId!))
+        .unique();
+
+      if (evidence?.state !== "failed")
+        throw new ConvexError(
+          "Confirmation is unknown. Check status before retrying.",
+        );
+      await ctx.db.patch(row._id, {
+        state: "awaiting_approval",
+        revision: row.revision + 1,
+        reviewId: null,
+        hash: null,
+        error: null,
+        updatedAt: Date.now(),
+      });
+
+      return;
+    }
+
     if (action.kind === "report") {
       if (row.reviewId !== action.reviewId || row.state !== "submitting")
         return;
@@ -583,6 +693,21 @@ export const change = mutation({
             BigInt(action.receivedUnits) < BigInt(row.swap.minimumOut)
           )
             throw new ConvexError("Confirmed swap evidence is required.");
+        } else {
+          const evidence = await ctx.db
+            .query("sponsorJobs")
+            .withIndex("by_intent", (q) => q.eq("id", action.reviewId))
+            .unique();
+
+          if (
+            evidence?.kind !== "transfer" ||
+            evidence.account !== row.account ||
+            evidence.state !== "confirmed" ||
+            evidence.hash !== action.hash ||
+            !evidence.ledger ||
+            !evidence.envelope
+          )
+            throw new ConvexError("Confirmed transfer evidence is required.");
         }
 
         const used = await ctx.db
@@ -594,6 +719,60 @@ export const change = mutation({
           throw new ConvexError(
             "This transaction already belongs to another operation.",
           );
+      }
+
+      if (!row.swap && action.state === "failed") {
+        const evidence = await ctx.db
+          .query("sponsorJobs")
+          .withIndex("by_intent", (q) => q.eq("id", action.reviewId))
+          .unique();
+
+        if (evidence?.state !== "failed")
+          throw new ConvexError(
+            "A pending transfer cannot be reported as failed.",
+          );
+      }
+
+      if (!row.swap && action.state === "confirmed" && action.balances) {
+        for (const [user, expected, balances] of [
+          [row.clerkUserId, row.account, action.balances.sender],
+          [row.recipientUserId, row.recipient, action.balances.recipient],
+        ] as const) {
+          if (balances.account !== expected)
+            throw new ConvexError("Balance account mismatch.");
+          const wallet = await payment(ctx, user);
+
+          if (wallet?.account === expected)
+            await ctx.db.patch(wallet._id, {
+              ...balances,
+              updatedAt: Date.now(),
+            });
+        }
+      }
+
+      if (
+        !row.swap &&
+        !row.requestId &&
+        row.recipientProfileId &&
+        action.state === "confirmed"
+      ) {
+        const sender = await profileFor(ctx, row.clerkUserId);
+
+        if (!sender) throw new ConvexError("Sender identity is unavailable.");
+        await deliver(
+          ctx,
+          row.recipientUserId,
+          `transfer:${row._id}:received`,
+          {
+            kind: "transfer_received",
+            actor: await publicPerson(ctx, sender._id),
+            transfer: {
+              amount: row.amount,
+              asset: row.asset,
+              hash: action.hash!,
+            },
+          },
+        );
       }
 
       if (request) {
@@ -649,8 +828,11 @@ export const change = mutation({
         updatedAt: Date.now(),
       });
 
-      if (row.swap && action.state === "confirmed")
-        await appendSwapConfirmation(ctx, row);
+      if (
+        action.state === "confirmed" &&
+        (row.swap || (!row.requestId && row.recipientProfileId))
+      )
+        await appendOperationConfirmation(ctx, row);
 
       return;
     }
@@ -691,8 +873,10 @@ export const change = mutation({
         updatedAt: Date.now(),
       });
     } else {
-      if (!/^[1-9]\d{0,37}$/.test(action.units))
-        throw new ConvexError("Invalid asset units.");
+      const parsed = parseAmount(action.amount, row.asset);
+
+      if (parsed.units !== action.units || parsed.amount !== action.amount)
+        throw new ConvexError("Invalid asset amount.");
       await ctx.db.patch(row._id, {
         amount: action.amount,
         units: action.units,

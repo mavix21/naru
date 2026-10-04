@@ -17,7 +17,7 @@ export const maxDuration = 150;
 
 const operationInput = z
   .object({
-    action: z.enum(["review", "authorize", "cancel", "edit"]),
+    action: z.enum(["review", "authorize", "cancel", "edit", "retry"]),
     id: z.string().min(1).max(100),
     revision: z.number().int().positive(),
     amount: z.string().max(40).optional(),
@@ -95,6 +95,23 @@ async function handle(request: Request) {
         "This review changed. Read the updated card before confirming.",
       );
 
+    if (body.action === "retry") {
+      await fetchMutation(
+        api.operations.change,
+        {
+          key,
+          id,
+          revision: body.revision,
+          action: { kind: "retry" },
+        },
+        { token },
+      );
+
+      return Response.json({
+        operation: await fetchQuery(api.operations.get, { id }, { token }),
+      });
+    }
+
     if (operation.state !== "awaiting_approval") {
       await reconcileOperation(operation, token, service);
 
@@ -110,7 +127,7 @@ async function handle(request: Request) {
         { token },
       );
     } else if (body.action === "edit") {
-      const amount = parseAmount(body.amount ?? "");
+      const amount = parseAmount(body.amount ?? "", operation.asset);
       await validateOperation({ ...operation, ...amount }, token, service);
       await fetchMutation(
         api.operations.change,
@@ -129,6 +146,7 @@ async function handle(request: Request) {
         const review = await service.review(operation.account, {
           recipient: operation.recipient,
           amount: operation.amount,
+          asset: operation.asset,
         });
 
         await fetchMutation(
@@ -164,7 +182,7 @@ async function handle(request: Request) {
       );
 
       try {
-        await service.authorize(body.reviewId, body.auth);
+        await service.authorize(body.reviewId, body.auth, operation);
       } catch (error) {
         const current = await service.store.get(body.reviewId);
 

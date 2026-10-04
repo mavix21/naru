@@ -24,6 +24,7 @@ const labels = new Map([
   ["declined", "declined a request"],
   ["cancelled", "cancelled a request"],
   ["paid", "payment confirmed"],
+  ["transfer_received", "sent you a payment · confirmed"],
 ]);
 
 export function SocialMenus({

@@ -1,5 +1,24 @@
 import { Address, nativeToScVal, xdr } from "@stellar/stellar-sdk";
 
+export function transferFunction(
+  token: string,
+  from: string,
+  to: string,
+  amount: bigint,
+) {
+  return xdr.HostFunction.hostFunctionTypeInvokeContract(
+    new xdr.InvokeContractArgs({
+      contractAddress: Address.fromString(token).toScAddress(),
+      functionName: "transfer",
+      args: [
+        Address.fromString(from).toScVal(),
+        Address.fromString(to).toScVal(),
+        nativeToScVal(amount, { type: "i128" }),
+      ],
+    }),
+  );
+}
+
 /** Defense in depth: what the browser authorizes must be what its review shows. */
 export function validateTransferReview(
   entry: xdr.SorobanAuthorizationEntry,
@@ -15,15 +34,12 @@ export function validateTransferReview(
 
   const credentials = entry.credentials().addressV2();
 
-  const expected = new xdr.InvokeContractArgs({
-    contractAddress: Address.fromString(token).toScAddress(),
-    functionName: "transfer",
-    args: [
-      Address.fromString(account).toScVal(),
-      Address.fromString(recipient).toScVal(),
-      nativeToScVal(BigInt(units), { type: "i128" }),
-    ],
-  });
+  const expected = transferFunction(
+    token,
+    account,
+    recipient,
+    BigInt(units),
+  ).invokeContract();
 
   const root = entry.rootInvocation();
 

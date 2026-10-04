@@ -5,7 +5,7 @@ import { api } from "@naru/backend/api";
 import { fetchMutation, fetchQuery } from "convex/nextjs";
 
 import { serverKey } from "@/lib/auth/server";
-import { parseAmount } from "@/lib/money";
+import { assertTransferAmount } from "@/lib/money";
 import { SmartAccountService } from "@/lib/smart-account/server/service";
 import { reconcileSwap } from "@/lib/swaps/server";
 
@@ -16,6 +16,12 @@ export async function validateOperation(
 ) {
   if (operation.swap)
     throw new Error("Use the swap card to review this operation.");
+
+  if (
+    operation.asset === "USDC" &&
+    (!operation.recipientProfileId || operation.requestId)
+  )
+    throw new Error("USDC transfers require an accepted friend.");
 
   const [sender, recipient] = await Promise.all([
     fetchQuery(api.payments.current, {}, { token }),
@@ -48,12 +54,7 @@ export async function validateOperation(
       "The recipient account changed. Cancel this draft and review a new transfer.",
     );
 
-  if (
-    operation.asset !== "XLM" ||
-    operation.token !== service.config.publicConfig.token ||
-    parseAmount(operation.amount).units !== operation.units
-  )
-    throw new Error("The asset or amount does not match the saved operation.");
+  assertTransferAmount(operation);
 
   if (operation.requestId) {
     const { request, split, isOrganizer } = await fetchQuery(
@@ -82,10 +83,11 @@ export async function validateOperation(
     service.requireAccount(operation.recipient),
   ]);
 
-  if (
-    BigInt(await service.balance(operation.account)) < BigInt(operation.units)
-  )
-    throw new Error("Your test XLM balance is too low for this transfer.");
+  await service.requireTransferBalance(
+    operation.account,
+    operation.asset,
+    operation.units,
+  );
 }
 
 export async function reconcileOperation(
@@ -96,6 +98,7 @@ export async function reconcileOperation(
   if (operation.swap) return reconcileSwap(operation, token, service);
 
   if (operation.state !== "submitting" || !operation.reviewId) return;
+  assertTransferAmount(operation);
   let record = await service.store.get(operation.reviewId);
 
   if (!record || record.account !== operation.account) return;
@@ -115,11 +118,19 @@ export async function reconcileOperation(
   }
 
   const job = await service.reconcile(record);
+  let balances;
 
   if (job.state === "confirmed") {
     if (!job.hash || !job.ledger)
       throw new Error("Missing confirmed transaction evidence.");
     service.assertTransfer((await service.store.get(record.id))!, operation);
+
+    const [sender, recipient] = await Promise.all([
+      service.walletBalances(operation.account),
+      service.walletBalances(operation.recipient),
+    ]);
+
+    balances = { sender, recipient };
   }
 
   await fetchMutation(
@@ -139,6 +150,7 @@ export async function reconcileOperation(
               : "submitting",
         hash: job.hash,
         error: job.error,
+        balances,
       },
     },
     { token },

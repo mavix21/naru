@@ -63,6 +63,7 @@ export const reviewSchema = z.object({
   account: z.string(),
   recipient: z.string(),
   token: z.string(),
+  asset: z.enum(["XLM", "USDC"]).default("XLM"),
   amount: z.string().regex(/^(0|[1-9]\d*)(\.\d{1,7})?$/),
   auth: z.string(),
   expiration: z.number(),
