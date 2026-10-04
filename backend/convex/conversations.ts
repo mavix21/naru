@@ -11,8 +11,14 @@ import { ConvexError, v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
 
 import { components } from "./_generated/api";
-import { mutation, query, type QueryCtx } from "./_generated/server";
+import {
+  mutation,
+  query,
+  type MutationCtx,
+  type QueryCtx,
+} from "./_generated/server";
 import { requireServer, requireUser } from "./access";
+import { displayAmount } from "./money";
 import { validateMentions } from "./socialShared";
 import { mentionValidator } from "./validators";
 
@@ -21,6 +27,97 @@ function find(ctx: QueryCtx, user: string) {
     .query("conversations")
     .withIndex("by_clerk_user", (q) => q.eq("clerkUserId", user))
     .unique();
+}
+
+// Called in the same transaction that records a verified swap confirmation.
+// Reuse the balance tool's saved-message format so the existing card renders
+// immediately and the completion remains in the companion's conversation.
+export async function appendSwapConfirmation(
+  ctx: MutationCtx,
+  operation: Doc<"operations">,
+) {
+  const conversation = await find(ctx, operation.clerkUserId);
+
+  if (!conversation?.agentThreadId)
+    throw new ConvexError("Saved agent thread not found.");
+  const messageId = `swap-confirmed-${operation._id}`;
+
+  const existing = await ctx.db
+    .query("messages")
+    .withIndex("by_message", (q) =>
+      q.eq("conversationId", conversation._id).eq("messageId", messageId),
+    )
+    .unique();
+
+  if (existing) return;
+
+  // Reconciliation refreshes both assets before reporting confirmation.
+  const wallet = await ctx.db
+    .query("payments")
+    .withIndex("by_clerk_user", (q) =>
+      q.eq("clerkUserId", operation.clerkUserId),
+    )
+    .unique();
+
+  if (wallet?.state !== "ready" || wallet.account !== operation.account)
+    throw new ConvexError("The swap's wallet balance is unavailable.");
+  const toolCallId = `swap-balance-${operation._id}`;
+  const sequence = conversation.sequence + 1;
+
+  const saved = await saveMessages(ctx, components.agent, {
+    threadId: conversation.agentThreadId,
+    userId: operation.clerkUserId,
+    agentName: "Naru",
+    order: sequence,
+    messages: [
+      {
+        role: "assistant",
+        content: [
+          { type: "text", text: "Done — your swap is complete." },
+          { type: "tool-call", toolCallId, toolName: "readBalance", input: {} },
+        ],
+      },
+      {
+        role: "tool",
+        content: [
+          {
+            type: "tool-result",
+            toolCallId,
+            toolName: "readBalance",
+            output: {
+              type: "json",
+              value: {
+                active: true,
+                address: wallet.account,
+                amount:
+                  wallet.balance === null
+                    ? null
+                    : displayAmount(wallet.balance),
+                balanceError: wallet.balanceError,
+                asset: "XLM",
+                usdcAmount:
+                  wallet.usdcBalance == null
+                    ? null
+                    : displayAmount(wallet.usdcBalance),
+                usdcError: wallet.usdcBalanceError ?? null,
+                network: "Stellar testnet",
+                observedAt: new Date(wallet.updatedAt).toISOString(),
+              },
+            },
+          },
+        ],
+      },
+    ],
+  });
+
+  await ctx.db.insert("messages", {
+    conversationId: conversation._id,
+    messageId,
+    sequence,
+    role: "assistant",
+    agentMessageIds: saved.messages.map((message) => message._id),
+  });
+  await ctx.db.patch(conversation._id, { sequence });
 }
 
 async function readMessages(ctx: QueryCtx, rows: Doc<"messages">[]) {

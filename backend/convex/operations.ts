@@ -4,6 +4,7 @@ import type { Id } from "./_generated/dataModel";
 
 import { mutation, query, type QueryCtx } from "./_generated/server";
 import { requireServer, requireUser } from "./access";
+import { appendSwapConfirmation } from "./conversations";
 import {
   deliver,
   profileFor,
@@ -647,6 +648,9 @@ export const change = mutation({
             : row.receivedUnits,
         updatedAt: Date.now(),
       });
+
+      if (row.swap && action.state === "confirmed")
+        await appendSwapConfirmation(ctx, row);
 
       return;
     }

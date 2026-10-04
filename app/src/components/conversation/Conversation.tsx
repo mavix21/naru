@@ -115,8 +115,13 @@ function BalanceCard({
   const query = useAccountStatus(userId);
   const current = query.data;
 
+  // A newly delivered balance can be newer than the shared browser cache.
+  // Keep that snapshot visible while the mounted query refreshes the wallet.
   const value =
-    current?.state === "ready" && current.account
+    current?.state === "ready" &&
+    current.account &&
+    (!initial.address || current.account === initial.address) &&
+    query.dataUpdatedAt >= Date.parse(initial.observedAt)
       ? {
           ...initial,
           address: current.account,
