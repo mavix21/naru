@@ -12,10 +12,16 @@ export const TESTNET = {
     "e63a030d0f1a1481e36059a4837c433083b33e704c1f9625b7314795b6d72b76",
 } as const;
 
+export const TEST_FUNDING = {
+  amount: "1000",
+  units: "10000000000",
+  label: "1,000",
+} as const;
+
 export const jobSchema = z.object({
   id: z.string(),
   account: z.string(),
-  kind: z.enum(["deploy", "fund", "transfer"]),
+  kind: z.enum(["deploy", "fund", "transfer", "swap"]),
   state: z.enum(["review", "preparing", "pending", "confirmed", "failed"]),
   hash: z.string().nullable(),
   ledger: z.number().nullable(),
@@ -24,6 +30,10 @@ export const jobSchema = z.object({
 
 export type Job = z.infer<typeof jobSchema>;
 
+export function fundingInProgress(job?: Job | null) {
+  return job?.state === "preparing" || job?.state === "pending";
+}
+
 export const configSchema = z.object({
   origin: z.string(),
   rpId: z.string(),
@@ -31,7 +41,7 @@ export const configSchema = z.object({
   sponsor: z.string(),
   token: z.string(),
   transferAmount: z.literal("0.1"),
-  fundingAmount: z.literal("5"),
+  fundingAmount: z.literal(TEST_FUNDING.amount),
 });
 
 export type SmartAccountConfig = z.infer<typeof configSchema>;
@@ -41,6 +51,8 @@ export const statusSchema = z.object({
   deployed: z.boolean(),
   balance: z.string().nullable(),
   balanceError: z.string().nullable().optional(),
+  usdcBalance: z.string().nullable().optional(),
+  usdcBalanceError: z.string().nullable().optional(),
   jobs: z.array(jobSchema),
 });
 

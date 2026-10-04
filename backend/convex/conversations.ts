@@ -1,5 +1,16 @@
+import {
+  createThread,
+  fetchContextMessages,
+  saveMessage,
+  saveMessages,
+  toUIMessages,
+} from "@convex-dev/agent";
+import { convertToModelMessages, validateUIMessages, type UIMessage } from "ai";
 import { ConvexError, v } from "convex/values";
 
+import type { Doc } from "./_generated/dataModel";
+
+import { components } from "./_generated/api";
 import { mutation, query, type QueryCtx } from "./_generated/server";
 import { requireServer, requireUser } from "./access";
 import { validateMentions } from "./socialShared";
@@ -10,6 +21,39 @@ function find(ctx: QueryCtx, user: string) {
     .query("conversations")
     .withIndex("by_clerk_user", (q) => q.eq("clerkUserId", user))
     .unique();
+}
+
+async function readMessages(ctx: QueryCtx, rows: Doc<"messages">[]) {
+  const messageIds = rows.flatMap((row) => row.agentMessageIds);
+
+  const docs = messageIds.length
+    ? await ctx.runQuery(components.agent.messages.getMessagesByIds, {
+        messageIds,
+      })
+    : [];
+
+  const byId = new Map(
+    docs.flatMap((doc) => (doc ? [[doc._id, doc] as const] : [])),
+  );
+
+  return rows.map((row) => {
+    const saved = row.agentMessageIds.map((id) => {
+      const doc = byId.get(id);
+
+      if (!doc)
+        throw new ConvexError("A saved conversation message is unavailable.");
+
+      return doc;
+    });
+
+    const message: UIMessage = {
+      id: row.messageId,
+      role: row.role,
+      parts: toUIMessages(saved).flatMap((item) => item.parts),
+    };
+
+    return { ...row, message };
+  });
 }
 
 export const event = query({
@@ -55,7 +99,7 @@ export const current = query({
       .order("desc")
       .take(41);
 
-    const messages = rows.slice(0, 40).reverse();
+    const messages = await readMessages(ctx, rows.slice(0, 40).reverse());
 
     const operations = (
       await Promise.all(
@@ -73,6 +117,48 @@ export const current = query({
     ).flat();
 
     return { conversation, messages, operations, hasMore: rows.length > 40 };
+  },
+});
+
+// Only the authenticated app server reads model context. The thread and prompt
+// are resolved from owned records, never from caller-supplied component IDs.
+export const context = query({
+  args: { key: v.string(), messageId: v.string() },
+  handler: async (ctx, { key, messageId }) => {
+    requireServer(key);
+    const user = await requireUser(ctx);
+    const conversation = await find(ctx, user);
+
+    if (!conversation?.agentThreadId || conversation.activeTurn !== messageId)
+      throw new ConvexError("This conversation turn is no longer active.");
+
+    const prompt = await ctx.db
+      .query("messages")
+      .withIndex("by_message", (q) =>
+        q.eq("conversationId", conversation._id).eq("messageId", messageId),
+      )
+      .unique();
+
+    const promptMessageId = prompt?.agentMessageIds?.[0];
+
+    if (!promptMessageId) throw new ConvexError("Saved prompt not found.");
+
+    const messages = await fetchContextMessages(ctx, components.agent, {
+      userId: user,
+      threadId: conversation.agentThreadId,
+      targetMessageId: promptMessageId,
+      contextOptions: { recentMessages: 40 },
+    });
+
+    // Live financial records are authoritative. Keep conversational text, but
+    // don't reuse historical balances, quotes, tool calls, or social deliveries.
+    return messages.flatMap((doc) => {
+      const role = doc.message?.role;
+
+      return doc.text && (role === "user" || role === "assistant")
+        ? [{ role, content: doc.text }]
+        : [];
+    });
   },
 });
 
@@ -141,20 +227,28 @@ export const begin = mutation({
       ).length >= 8
     )
       throw new ConvexError("A little pause, please. Try again in a minute.");
+
+    const threadId =
+      conversation.agentThreadId ??
+      (await createThread(ctx, components.agent, { userId: user }));
+
+    const prompt = await saveMessage(ctx, components.agent, {
+      threadId,
+      userId: user,
+      order: conversation.sequence + 1,
+      prompt: args.text,
+    });
+
     await ctx.db.insert("messages", {
       conversationId: conversation._id,
       messageId: args.messageId,
       sequence: conversation.sequence + 1,
       role: "user",
       mentions: args.mentions ?? [],
-      content: JSON.stringify({
-        id: args.messageId,
-        role: "user",
-        parts: [{ type: "text", text: args.text }],
-        metadata: { mentions: args.mentions ?? [] },
-      }),
+      agentMessageIds: [prompt.messageId],
     });
     await ctx.db.patch(conversation._id, {
+      agentThreadId: threadId,
       sequence: conversation.sequence + 2,
       replySequence: conversation.sequence + 2,
       activeTurn: args.messageId,
@@ -176,7 +270,8 @@ export const finish = mutation({
   },
   handler: async (ctx, args) => {
     requireServer(args.key);
-    const conversation = await find(ctx, await requireUser(ctx));
+    const user = await requireUser(ctx);
+    const conversation = await find(ctx, user);
 
     if (!conversation || conversation.activeTurn !== args.messageId) return;
 
@@ -185,12 +280,48 @@ export const finish = mutation({
         throw new ConvexError("Reply is too large.");
 
       if (!args.responseId) throw new ConvexError("Missing response ID.");
+
+      const [response] = await validateUIMessages({
+        messages: [JSON.parse(args.content)],
+      });
+
+      if (response.role !== "assistant" || response.id !== args.responseId)
+        throw new ConvexError("Invalid companion reply.");
+
+      const prompt = await ctx.db
+        .query("messages")
+        .withIndex("by_message", (q) =>
+          q
+            .eq("conversationId", conversation._id)
+            .eq("messageId", args.messageId),
+        )
+        .unique();
+
+      const promptMessageId = prompt?.agentMessageIds?.[0];
+
+      if (!conversation.agentThreadId || !promptMessageId)
+        throw new ConvexError("Saved agent thread not found.");
+
+      const modelMessages = await convertToModelMessages([response], {
+        ignoreIncompleteToolCalls: true,
+      });
+
+      const saved = modelMessages.length
+        ? await saveMessages(ctx, components.agent, {
+            threadId: conversation.agentThreadId,
+            userId: user,
+            promptMessageId,
+            messages: modelMessages,
+            agentName: "Naru",
+          })
+        : { messages: [] };
+
       await ctx.db.insert("messages", {
         conversationId: conversation._id,
         messageId: args.responseId,
         sequence: conversation.replySequence ?? conversation.sequence,
         role: "assistant",
-        content: args.content,
+        agentMessageIds: saved.messages.map((message) => message._id),
       });
     }
 

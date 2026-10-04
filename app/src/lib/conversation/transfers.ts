@@ -7,12 +7,16 @@ import { fetchMutation, fetchQuery } from "convex/nextjs";
 import { serverKey } from "@/lib/auth/server";
 import { parseAmount } from "@/lib/money";
 import { SmartAccountService } from "@/lib/smart-account/server/service";
+import { reconcileSwap } from "@/lib/swaps/server";
 
 export async function validateOperation(
   operation: Doc<"operations">,
   token: string,
   service: SmartAccountService,
 ) {
+  if (operation.swap)
+    throw new Error("Use the swap card to review this operation.");
+
   const [sender, recipient] = await Promise.all([
     fetchQuery(api.payments.current, {}, { token }),
     operation.recipientProfileId
@@ -89,6 +93,8 @@ export async function reconcileOperation(
   token: string,
   service: SmartAccountService,
 ) {
+  if (operation.swap) return reconcileSwap(operation, token, service);
+
   if (operation.state !== "submitting" || !operation.reviewId) return;
   let record = await service.store.get(operation.reviewId);
 

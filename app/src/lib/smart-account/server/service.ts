@@ -14,13 +14,16 @@ import {
   xdr,
 } from "@stellar/stellar-sdk";
 import { randomUUID } from "node:crypto";
+import { z } from "zod";
 
 import { parseAmount } from "@/lib/money";
+import { SWAP } from "@/lib/swaps/shared";
 
 import type { Deployment } from "../payments";
 
 import {
   TESTNET,
+  TEST_FUNDING,
   jobSchema,
   type AccountStatus,
   type Job,
@@ -33,9 +36,12 @@ import {
   validateDeployment,
   validateSignedAuthorization,
 } from "./policy";
+import { readContract, stellarRpc } from "./rpc";
 import { SponsorStore, type RecordEntry } from "./store";
 
-const server = new rpc.Server(TESTNET.rpcUrl, { timeout: 20_000 });
+export { stellarRpc } from "./rpc";
+
+const server = stellarRpc;
 
 const MAX_FEE_STROOPS = BigInt(5_000_000); // 0.5 test XLM, including resource fees
 
@@ -101,7 +107,7 @@ export class SmartAccountService {
       BigInt(55_000_000)
     ) {
       throw new Error(
-        "Sponsor needs at least 5.5 test XLM for the funding grant and capped fees. Fund its G-address with Friendbot.",
+        "Naru’s testnet fee account needs refilling. Please try again shortly.",
       );
     }
 
@@ -111,6 +117,7 @@ export class SmartAccountService {
   async transaction(
     func: xdr.HostFunction,
     auth: xdr.SorobanAuthorizationEntry[],
+    deadline?: number,
   ) {
     return new TransactionBuilder(
       await server.getAccount(this.config.sponsor.publicKey()),
@@ -120,16 +127,14 @@ export class SmartAccountService {
       },
     )
       .addOperation(Operation.invokeHostFunction({ func, auth }))
-      .setTimeout(180)
+      .setTimebounds(0, deadline ?? Math.floor(Date.now() / 1000) + 180)
       .build();
   }
 
-  async balance(account: string) {
+  async balance(account: string, token = this.config.publicConfig.token) {
     const func = xdr.HostFunction.hostFunctionTypeInvokeContract(
       new xdr.InvokeContractArgs({
-        contractAddress: Address.fromString(
-          this.config.publicConfig.token,
-        ).toScAddress(),
+        contractAddress: Address.fromString(token).toScAddress(),
         functionName: "balance",
         args: [Address.fromString(account).toScVal()],
       }),
@@ -143,6 +148,34 @@ export class SmartAccountService {
       throw new Error("Could not read testnet asset balance.");
 
     return scValToBigInt(simulation.result.retval).toString();
+  }
+
+  async readContract(contract: string, method: string, args: xdr.ScVal[] = []) {
+    return readContract(
+      this.config.publicConfig.sponsor,
+      contract,
+      method,
+      args,
+    );
+  }
+
+  async usdcBalance(account: string) {
+    const entry = await server.getContractData(
+      SWAP.usdc,
+      xdr.ScVal.scvLedgerKeyContractInstance(),
+    );
+
+    if (
+      entry.val.contractData().val().instance().executable().switch().name !==
+        "contractExecutableStellarAsset" ||
+      (await this.readContract(SWAP.usdc, "name")) !== `USDC:${SWAP.issuer}` ||
+      (await this.readContract(SWAP.usdc, "decimals")) !== 7
+    )
+      throw new Error(
+        "The official Testnet USDC identity could not be verified.",
+      );
+
+    return this.balance(account, SWAP.usdc);
   }
 
   async requireAccount(account: string) {
@@ -185,13 +218,20 @@ export class SmartAccountService {
 
     let balance: string | null = null;
     let balanceError: string | null = null;
+    let usdcBalance: string | null = null;
+    let usdcBalanceError: string | null = null;
 
     if (deployed) {
-      try {
-        balance = await this.balance(account);
-      } catch {
-        balanceError = "Balance is unavailable. Please refresh.";
-      }
+      const [xlm, usdc] = await Promise.allSettled([
+        this.balance(account),
+        this.usdcBalance(account),
+      ]);
+
+      if (xlm.status === "fulfilled") balance = xlm.value;
+      else balanceError = "XLM balance is unavailable. Please refresh.";
+
+      if (usdc.status === "fulfilled") usdcBalance = usdc.value;
+      else usdcBalanceError = "USDC balance is unavailable. Please refresh.";
     }
 
     return {
@@ -199,6 +239,8 @@ export class SmartAccountService {
       deployed,
       balance,
       balanceError,
+      usdcBalance,
+      usdcBalanceError,
       jobs,
     };
   }
@@ -341,11 +383,44 @@ export class SmartAccountService {
     );
   }
 
-  async fund(account: string) {
+  async fund(account: string, requestId: string = randomUUID()) {
     await this.requireAccount(account);
 
+    // Retries of a chat turn or button request never create a second top-up.
+    const id = `fund:${account}:${requestId}`;
+    const existing = await this.store.get(id);
+
+    if (existing) {
+      if (existing.state !== "review") return this.reconcile(existing);
+
+      if (existing.expires <= Date.now()) {
+        await this.store.finish(
+          existing.id,
+          "failed",
+          null,
+          "This top-up expired before it was sent. Please try again.",
+          "review",
+        );
+
+        return this.reconcile((await this.store.get(existing.id))!);
+      }
+
+      return this.submit(
+        existing,
+        z
+          .array(z.string())
+          .parse(JSON.parse(existing.auth))
+          .map((entry) =>
+            xdr.SorobanAuthorizationEntry.fromXDR(entry, "base64"),
+          ),
+      );
+    }
+
     const previous = (await this.store.accountJobs(account)).find(
-      (job) => job.kind === "fund" && job.state !== "failed",
+      (job) =>
+        job.kind === "fund" &&
+        job.state !== "failed" &&
+        job.state !== "confirmed",
     );
 
     if (previous && previous.state !== "review") {
@@ -361,7 +436,7 @@ export class SmartAccountService {
     );
 
     const job = await this.store.insert(
-      randomUUID(),
+      id,
       account,
       "fund",
       func.toXDR("base64"),
@@ -369,7 +444,13 @@ export class SmartAccountService {
       Date.now() + 180_000,
     );
 
-    return this.submit(job, auth);
+    return this.submit(
+      job,
+      z
+        .array(z.string())
+        .parse(JSON.parse(job.auth))
+        .map((entry) => xdr.SorobanAuthorizationEntry.fromXDR(entry, "base64")),
+    );
   }
 
   async review(
@@ -516,6 +597,7 @@ export class SmartAccountService {
   async submit(
     job: RecordEntry,
     auth: xdr.SorobanAuthorizationEntry[],
+    validatePrepared?: (transaction: Transaction) => void,
   ): Promise<Job> {
     // A previous funding, deployment, or transfer may belong to another user.
     // Reconcile its saved envelope before claiming the sponsor for a new send.
@@ -534,9 +616,14 @@ export class SmartAccountService {
         60,
       );
 
+      // The sponsor sequence is reserved before replenishing. Friendbot funds
+      // this G-address; the existing SAC transfer delivers XLM to the wallet.
+      if (job.kind === "fund") await this.ensureTestFunding();
+
       const transaction = await this.transaction(
         xdr.HostFunction.fromXDR(job.func, "base64"),
         auth,
+        job.kind === "swap" ? Math.floor(job.expires / 1000) : undefined,
       );
 
       // Enforce passkey/deployer signatures BEFORE spending sponsor fees. Then
@@ -548,19 +635,33 @@ export class SmartAccountService {
       );
 
       if (!rpc.Api.isSimulationSuccess(simulation)) {
+        if (job.kind === "swap" && rpc.Api.isSimulationError(simulation))
+          console.error(
+            "Soroswap authorization simulation rejected:",
+            simulation.error.split("\n")[0],
+            simulation.error.match(/Error\(Contract, #\d+\)/)?.[0] ?? "",
+          );
         throw new Error(
-          rpc.Api.isSimulationError(simulation)
-            ? `Testnet simulation rejected: ${simulation.error}`
-            : "Contract state requires restoration; no transaction sent.",
+          job.kind === "swap"
+            ? "The swap authorization or minimum receive check failed. No exchange was submitted. Request a fresh quote."
+            : rpc.Api.isSimulationError(simulation)
+              ? `Testnet simulation rejected: ${simulation.error}`
+              : "Contract state requires restoration; no transaction sent.",
         );
       }
 
       const prepared = rpc.assembleTransaction(transaction, simulation).build();
 
+      if (job.kind === "swap" && job.expires <= Date.now())
+        throw new Error(
+          "Quote expired during authorization. No transaction was sent.",
+        );
+
       if (BigInt(prepared.fee) > MAX_FEE_STROOPS)
         throw new Error(
           "Estimated fee exceeds the 0.5 test XLM sponsorship cap.",
         );
+      validatePrepared?.(prepared);
       prepared.sign(this.config.sponsor);
       // Commit the exact signed envelope/hash BEFORE any network send. Replays
       // reuse this envelope and sequence across Vercel invocations.
@@ -586,6 +687,34 @@ export class SmartAccountService {
     }
 
     return this.reconcile((await this.store.get(job.id))!);
+  }
+
+  private async ensureTestFunding() {
+    const sponsor = this.config.sponsor.publicKey();
+    const minimum = BigInt(TEST_FUNDING.units) + BigInt(20_000_000);
+
+    if (BigInt(await this.balance(sponsor)) >= minimum) return;
+
+    try {
+      const response = await fetch(
+        `https://friendbot.stellar.org/?addr=${encodeURIComponent(sponsor)}`,
+        {
+          method: "POST",
+          cache: "no-store",
+          signal: AbortSignal.timeout(30_000),
+        },
+      );
+
+      if (!response.ok) throw new Error("Friendbot unavailable");
+
+      // Verify spendable funding on our pinned network, not just an HTTP 200.
+      if (BigInt(await this.balance(sponsor)) < minimum)
+        throw new Error("Refill not visible yet");
+    } catch {
+      throw new Error(
+        "Free test XLM is temporarily unavailable while Naru refills with Friendbot. Please try again in a minute.",
+      );
+    }
   }
 
   async reconcile(job: RecordEntry): Promise<Job> {
@@ -629,13 +758,16 @@ export class SmartAccountService {
         result.ledger,
         null,
         "pending",
+        job.kind === "swap" ? result.returnValue?.toXDR("base64") : undefined,
       );
     } else if (result.status === "FAILED") {
       await this.store.finish(
         job.id,
         "failed",
         result.ledger,
-        `On-chain failure: ${result.resultXdr.toXDR("base64")}`,
+        job.kind === "swap"
+          ? "The swap failed on Stellar Testnet. No exchange was completed."
+          : `On-chain failure: ${result.resultXdr.toXDR("base64")}`,
         "pending",
       );
     } else {

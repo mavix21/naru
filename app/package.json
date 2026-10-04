@@ -12,7 +12,10 @@
     "lint": "oxlint --react-plugin --nextjs-plugin --jsx-a11y-plugin --deny-warnings src next.config.ts postcss.config.mjs",
     "format": "oxfmt .",
     "prepare": "husky",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:swap:e2e": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/validate-swap.mjs",
+    "swaps:check": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --conditions=react-server --import tsx scripts/check-swap-market.ts"
   },
   "dependencies": {
     "@ai-sdk/react": "4.0.119",
@@ -42,6 +45,7 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@shadcn/lint": "^0.2.0",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^24.0.0",
@@ -55,7 +59,9 @@
     "oxfmt": "^0.70.0",
     "oxlint": "^1.85.0",
     "tailwindcss": "^4.3.3",
-    "typescript": "^6.0.2"
+    "tsx": "^4.23.15",
+    "typescript": "^6.0.2",
+    "vitest": "^5.0.3"
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx,mjs,cjs}": "oxlint --react-plugin --nextjs-plugin --jsx-a11y-plugin --fix",

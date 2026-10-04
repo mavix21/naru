@@ -4,7 +4,26 @@ export const sponsorJobKind = v.union(
   v.literal("deploy"),
   v.literal("fund"),
   v.literal("transfer"),
+  v.literal("swap"),
 );
+
+export const swapTerms = v.object({
+  assetOut: v.literal("USDC"),
+  tokenOut: v.string(),
+  router: v.string(),
+  pool: v.string(),
+  expectedOut: v.string(),
+  minimumOut: v.string(),
+  targetOut: v.optional(v.string()),
+  quoteSource: v.optional(
+    v.union(v.literal("soroswap_api"), v.literal("soroswap_router")),
+  ),
+  quoteLedger: v.optional(v.number()),
+  slippageBps: v.literal(50),
+  quotedAt: v.number(),
+  expiresAt: v.number(),
+  deadline: v.number(),
+});
 
 export const sponsorJobState = v.union(
   v.literal("review"),

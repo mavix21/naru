@@ -10,6 +10,7 @@ import { z } from "zod";
 import { serverKey } from "@/lib/auth/server";
 
 import {
+  credentialRecoverySchema,
   deploymentSchema,
   passkeyProofSchema,
   type PaymentState,
@@ -39,7 +40,9 @@ const inputSchema = z.discriminatedUnion("action", [
     .object({ action: z.literal("verify"), attempt, proof: passkeyProofSchema })
     .strict(),
   z.object({ action: z.literal("resume") }).strict(),
-  z.object({ action: z.literal("fund") }).strict(),
+  z
+    .object({ action: z.literal("fund"), requestId: z.string().uuid() })
+    .strict(),
 ]);
 
 type Enrollment = FunctionReturnType<typeof api.payments.enrollment>;
@@ -78,6 +81,8 @@ function update(
         account: string | null;
         balance: string | null;
         balanceError: string | null;
+        usdcBalance?: string | null;
+        usdcBalanceError?: string | null;
         job: {
           state: string;
           hash: string | null;
@@ -101,6 +106,8 @@ async function report(token: string, state: PaymentState) {
     account: state.account,
     balance: state.balance,
     balanceError: state.balanceError,
+    usdcBalance: state.usdcBalance ?? null,
+    usdcBalanceError: state.usdcBalanceError ?? null,
     job: state.job
       ? {
           state: state.job.state,
@@ -164,6 +171,8 @@ export async function readPaymentStatus(
     account: enrollment.account,
     balance: account.balance,
     balanceError: account.balanceError || null,
+    usdcBalance: account.usdcBalance ?? null,
+    usdcBalanceError: account.usdcBalanceError ?? null,
     job,
   };
 
@@ -185,6 +194,75 @@ async function resume(
   await service.resumeVerifiedDeployment(deployment);
 
   return readPaymentStatus(service, token, enrollment);
+}
+
+async function recoverCredential(service: SmartAccountService, token: string) {
+  const enrollment = await getEnrollment(token);
+
+  if (!enrollment?.account || !enrollment.deployment)
+    throw new Error("Activate your Naru wallet first.");
+
+  const deployment = deploymentSchema.parse(JSON.parse(enrollment.deployment));
+
+  if (deployment.account !== enrollment.account)
+    throw new Error("Your wallet’s passkey details could not be verified.");
+
+  const func = xdr.HostFunction.fromXDR(deployment.payload.func, "base64");
+
+  validateDeployment(
+    func,
+    deployment.payload.auth.map((entry) =>
+      xdr.SorobanAuthorizationEntry.fromXDR(entry, "base64"),
+    ),
+    deployment.account,
+    deployment.credentialId,
+    Buffer.from(deployment.publicKey, "hex"),
+    TESTNET,
+  );
+  await service.requireAccount(enrollment.account);
+
+  const receipt = (await service.store.accountJobs(enrollment.account)).find(
+    (job) => job.kind === "deploy" && job.state === "confirmed",
+  );
+
+  if (
+    !receipt?.hash ||
+    !receipt.ledger ||
+    receipt.func !== deployment.payload.func
+  )
+    throw new Error(
+      "Your wallet’s deployment receipt is unavailable. Please retry.",
+    );
+
+  return credentialRecoverySchema.parse({
+    account: enrollment.account,
+    credentialId: deployment.credentialId,
+    publicKey: deployment.publicKey,
+    birthWasmHash: func
+      .createContractV2()
+      .executable()
+      .wasmHash()
+      .toString("hex"),
+    creationTransactionHash: receipt.hash,
+    creationLedger: receipt.ledger,
+  });
+}
+
+export async function fundPayment(
+  service: SmartAccountService,
+  token: string,
+  requestId: string,
+) {
+  const enrollment = await getEnrollment(token);
+
+  if (!enrollment?.account) throw new Error("Activate your wallet first.");
+  const funding = await service.fund(enrollment.account, requestId);
+  const payment = await readPaymentStatus(service, token, enrollment);
+
+  return {
+    ...payment,
+    funding: jobSchema.parse(await service.store.get(funding.id)),
+  };
 }
 
 async function handle(request: Request) {
@@ -263,15 +341,32 @@ async function handle(request: Request) {
     );
 
     if (request.method === "GET") {
-      if (new URL(request.url).searchParams.get("view") === "config")
-        return json(await service.ready());
+      const view = new URL(request.url).searchParams.get("view");
+
+      if (view === "config") return json(await service.ready());
+
+      if (view === "credential")
+        return json(await recoverCredential(service, token));
+
       const payment = await readPaymentStatus(service, token, null);
 
+      const fundingId = new URL(request.url).searchParams.get("fundingId");
+
       const funding = payment.account
-        ? (await service.store.accountJobs(payment.account)).find(
-            (job) => job.kind === "fund",
-          )
+        ? fundingId
+          ? await service.store.get(fundingId)
+          : (await service.store.accountJobs(payment.account)).find(
+              (job) => job.kind === "fund",
+            )
         : null;
+
+      if (
+        fundingId &&
+        (!funding ||
+          funding.account !== payment.account ||
+          funding.kind !== "fund")
+      )
+        throw new Error("This top-up was not found for your wallet.");
 
       return json({
         ...payment,
@@ -382,15 +477,7 @@ async function handle(request: Request) {
       case "resume":
         return json(await resume(service, token, null));
       case "fund": {
-        const enrollment = await getEnrollment(token);
-
-        if (!enrollment?.account) throw new Error("Activate payments first.");
-        const funding = await service.fund(enrollment.account);
-
-        return json({
-          ...(await readPaymentStatus(service, token, enrollment)),
-          funding,
-        });
+        return json(await fundPayment(service, token, body.requestId));
       }
     }
   } catch (error) {

@@ -10,10 +10,14 @@ import { xdr } from "@stellar/stellar-sdk";
 import { Buffer } from "buffer";
 import { z } from "zod";
 
+import type { SwapIntent, SwapReview } from "@/lib/swaps/shared";
+
 import { parseAmount } from "@/lib/money";
+import { assertFreshSwap, validateSwapAuthorization } from "@/lib/swaps/policy";
 
 import {
   challengeSchema,
+  credentialRecoverySchema,
   paymentStateSchema,
   reservationSchema,
 } from "./payments";
@@ -430,15 +434,42 @@ export class NaruSmartAccount {
 
   async restore() {
     this.connected = false;
-    const metadata = await this.metadata();
+    let metadata = await this.metadata();
+
+    if (!metadata && this.userId) {
+      const recovery = credentialRecoverySchema.parse(
+        await this.request("?view=credential"),
+      );
+
+      metadata = {
+        credentialId: recovery.credentialId,
+        contractId: recovery.account,
+        publicKey: Uint8Array.from(Buffer.from(recovery.publicKey, "hex")),
+        createdAt: Date.now(),
+        birthWasmHash: recovery.birthWasmHash,
+        creationTransactionHash: recovery.creationTransactionHash,
+        creationLedger: recovery.creationLedger,
+      };
+
+      // Do not mark this as locally approved or supply a constructor hash.
+      // The kit must verify chain provenance AND a fresh ownership assertion.
+      await this.storage.save(metadata);
+    }
 
     if (!metadata)
       throw new Error(
-        "No same-browser metadata. Cross-device recovery is not enabled in this slice.",
+        "Open your wallet in the browser where you created its passkey.",
       );
+
     await this.status();
-    // `fresh` deliberately requests a native passkey prompt on every reload/restore.
-    const result = await this.kit.connectWallet({ fresh: true });
+
+    // Target the wallet passkey, rather than an unrelated sign-in passkey.
+    // Recovered credentials require ownership proof here; every payment still
+    // gets its own native passkey authorization in signTransfer/signSwap.
+    const result = await this.kit.connectWallet({
+      credentialId: metadata.credentialId,
+      contractId: metadata.contractId,
+    });
 
     if (
       !result ||
@@ -565,6 +596,32 @@ export class NaruSmartAccount {
       expiration: review.expiration,
       contextRuleIds: [0],
     });
+
+    return signed.toXDR("base64");
+  }
+
+  async signSwap(review: SwapReview, expected: SwapIntent) {
+    assertFreshSwap(expected);
+
+    if (
+      (await this.account()) !== expected.account ||
+      review.expiresAt !== expected.swap.expiresAt
+    )
+      throw new Error(
+        "The swap account or quote changed. Read the card again.",
+      );
+    const entry = xdr.SorobanAuthorizationEntry.fromXDR(review.auth, "base64");
+    validateSwapAuthorization(entry, expected);
+
+    const signed = await this.kit.signAuthEntry(entry, {
+      expiration: review.expiration,
+      // The validated tree has TWO auth contexts: router swap and XLM transfer.
+      // Both use the account's existing passkey rule; the contract requires one
+      // rule ID per context, even when both IDs refer to the same rule.
+      contextRuleIds: [0, 0],
+    });
+
+    assertFreshSwap(expected);
 
     return signed.toXDR("base64");
   }

@@ -18,6 +18,16 @@ export const deploymentSchema = z
 
 export type Deployment = z.infer<typeof deploymentSchema>;
 
+// Public recovery hints only. The kit independently verifies the deployment,
+// current signer, and a fresh passkey assertion before trusting these hints.
+export const credentialRecoverySchema = deploymentSchema
+  .pick({ account: true, credentialId: true, publicKey: true })
+  .extend({
+    birthWasmHash: z.string().regex(/^[0-9a-f]{64}$/),
+    creationTransactionHash: z.string().regex(/^[0-9a-f]{64}$/),
+    creationLedger: z.number().int().positive(),
+  });
+
 export const passkeyProofSchema = z
   .object({
     credentialId: z.string().min(22).max(683),
@@ -34,10 +44,16 @@ export const paymentStateSchema = z.object({
   account: z.string().nullable(),
   balance: z.string().nullable(),
   balanceError: z.string().nullable(),
+  usdcBalance: z.string().nullable().optional(),
+  usdcBalanceError: z.string().nullable().optional(),
   job: jobSchema.nullable(),
 });
 
 export type PaymentState = z.infer<typeof paymentStateSchema>;
+
+export const fundedPaymentSchema = paymentStateSchema.extend({
+  funding: jobSchema.nullable(),
+});
 
 export const reservationSchema = z.object({
   attempt: z.string().uuid(),

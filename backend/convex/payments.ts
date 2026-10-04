@@ -135,6 +135,8 @@ const action = v.union(
     account: v.union(v.string(), v.null()),
     balance: v.union(v.string(), v.null()),
     balanceError: v.union(v.string(), v.null()),
+    usdcBalance: v.optional(v.union(v.string(), v.null())),
+    usdcBalanceError: v.optional(v.union(v.string(), v.null())),
     job,
   }),
 );
@@ -151,6 +153,8 @@ export const current = query({
       account: row.account,
       balance: row.balance,
       balanceError: row.balanceError,
+      usdcBalance: row.usdcBalance ?? null,
+      usdcBalanceError: row.usdcBalanceError ?? null,
       job: row.job,
     };
   },
@@ -248,6 +252,8 @@ export const apply = mutation({
               ),
         balance: request.balance,
         balanceError: request.balanceError?.slice(0, 300) ?? null,
+        usdcBalance: request.usdcBalance ?? null,
+        usdcBalanceError: request.usdcBalanceError?.slice(0, 300) ?? null,
         job: request.job,
         updatedAt: Date.now(),
       });

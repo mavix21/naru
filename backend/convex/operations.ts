@@ -13,6 +13,7 @@ import {
   throttle,
 } from "./socialShared";
 import { requestAccess } from "./splits";
+import { swapTerms } from "./validators";
 
 async function owned(ctx: QueryCtx, id: Id<"operations">) {
   const row = await ctx.db.get(id);
@@ -254,6 +255,117 @@ export const prepare = mutation({
   },
 });
 
+export const prepareSwap = mutation({
+  args: {
+    key: v.string(),
+    messageId: v.string(),
+    account: v.string(),
+    token: v.string(),
+    amount: v.string(),
+    units: v.string(),
+    swap: swapTerms,
+    reviewId: v.string(),
+    id: v.optional(v.id("operations")),
+    revision: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    requireServer(args.key);
+    const user = await requireUser(ctx);
+
+    const previous = args.id
+      ? await owned(ctx, args.id)
+      : await ctx.db
+          .query("operations")
+          .withIndex("by_turn", (q) =>
+            q.eq("clerkUserId", user).eq("messageId", args.messageId),
+          )
+          .unique();
+
+    if (previous && !args.id) return previous._id;
+
+    if (args.id) {
+      if (
+        !previous?.swap ||
+        previous.revision !== args.revision ||
+        previous.state !== "awaiting_approval" ||
+        previous.account !== args.account ||
+        previous.token !== args.token ||
+        previous.swap.targetOut !== args.swap.targetOut ||
+        (!previous.swap.targetOut && previous.units !== args.units) ||
+        previous.messageId !== args.messageId
+      )
+        throw new ConvexError(
+          "This swap changed. Read its current card before continuing.",
+        );
+    } else {
+      const conversation = await ctx.db
+        .query("conversations")
+        .withIndex("by_clerk_user", (q) => q.eq("clerkUserId", user))
+        .unique();
+
+      if (
+        conversation?.activeTurn !== args.messageId ||
+        conversation.activeUntil <= Date.now()
+      )
+        throw new ConvexError("This reply expired. Ask again.");
+    }
+
+    const sender = await payment(ctx, user);
+
+    if (sender?.state !== "ready" || sender.account !== args.account)
+      throw new ConvexError("Activate your Naru payment account first.");
+
+    const job = await ctx.db
+      .query("sponsorJobs")
+      .withIndex("by_intent", (q) => q.eq("id", args.reviewId))
+      .unique();
+
+    if (
+      !job ||
+      job.kind !== "swap" ||
+      job.account !== args.account ||
+      job.state !== "review" ||
+      job.expires !== args.swap.expiresAt ||
+      args.swap.expiresAt <= Date.now()
+    )
+      throw new ConvexError("The swap quote expired. Get a new quote.");
+
+    if (previous) {
+      await ctx.db.patch(previous._id, {
+        amount: args.amount,
+        units: args.units,
+        swap: args.swap,
+        reviewId: args.reviewId,
+        revision: previous.revision + 1,
+        updatedAt: Date.now(),
+      });
+
+      return previous._id;
+    }
+
+    return ctx.db.insert("operations", {
+      clerkUserId: user,
+      messageId: args.messageId,
+      recipientUserId: user,
+      recipientEmail: "",
+      recipientName: "Your account",
+      recipient: args.account,
+      account: args.account,
+      asset: "XLM",
+      token: args.token,
+      amount: args.amount,
+      units: args.units,
+      swap: args.swap,
+      reviewId: args.reviewId,
+      revision: 1,
+      state: "awaiting_approval",
+      hash: null,
+      error: null,
+      updatedAt: Date.now(),
+    });
+  },
+});
+
 export const prepareRequest = mutation({
   args: {
     key: v.string(),
@@ -379,6 +491,7 @@ export const change = mutation({
         ),
         hash: v.union(v.string(), v.null()),
         error: v.union(v.string(), v.null()),
+        receivedUnits: v.optional(v.string()),
       }),
     ),
   },
@@ -406,6 +519,11 @@ export const change = mutation({
 
     const action = args.action;
     const request = row.requestId ? await ctx.db.get(row.requestId) : null;
+
+    if (row.swap && (action.kind === "edit" || action.kind === "bind"))
+      throw new ConvexError(
+        "Get a fresh swap quote instead of changing reviewed terms.",
+      );
 
     if (row.requestId && (!request || request.operationId !== row._id))
       throw new ConvexError(
@@ -444,6 +562,27 @@ export const change = mutation({
       if (action.state === "confirmed") {
         if (!action.hash || !/^[a-f0-9]{64}$/.test(action.hash))
           throw new ConvexError("Confirmed transaction evidence is required.");
+
+        if (row.swap) {
+          const evidence = await ctx.db
+            .query("sponsorJobs")
+            .withIndex("by_intent", (q) => q.eq("id", action.reviewId))
+            .unique();
+
+          if (
+            evidence?.kind !== "swap" ||
+            evidence.account !== row.account ||
+            evidence.state !== "confirmed" ||
+            evidence.hash !== action.hash ||
+            !evidence.ledger ||
+            !evidence.envelope ||
+            !evidence.result ||
+            !action.receivedUnits ||
+            !/^[1-9]\d{0,38}$/.test(action.receivedUnits) ||
+            BigInt(action.receivedUnits) < BigInt(row.swap.minimumOut)
+          )
+            throw new ConvexError("Confirmed swap evidence is required.");
+        }
 
         const used = await ctx.db
           .query("operations")
@@ -502,6 +641,10 @@ export const change = mutation({
         state: action.state,
         hash: action.hash,
         error: action.error,
+        receivedUnits:
+          row.swap && action.state === "confirmed"
+            ? action.receivedUnits
+            : row.receivedUnits,
         updatedAt: Date.now(),
       });
 
@@ -514,6 +657,9 @@ export const change = mutation({
       );
 
     if (action.kind === "submit") {
+      if (row.swap && row.swap.deadline * 1000 <= Date.now())
+        throw new ConvexError("Quote expired. Get a new quote and review it.");
+
       if (row.reviewId !== action.reviewId)
         throw new ConvexError(
           "Authorization does not match the current review.",

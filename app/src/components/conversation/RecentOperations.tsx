@@ -3,6 +3,7 @@
 import { api } from "@naru/backend/api";
 import { usePreloadedQuery, type Preloaded } from "convex/react";
 
+import { SwapCard, swapLabels } from "./SwapCard";
 import { TransferCard, operationLabels } from "./TransferCard";
 
 export function RecentOperations({
@@ -28,17 +29,27 @@ export function RecentOperations({
             <summary className="cursor-pointer list-none rounded-lg focus-visible:outline-2 focus-visible:outline-ring">
               <span className="flex items-start justify-between gap-3 text-sm">
                 <span className="min-w-0 truncate">
-                  ↗ {operation.recipientName}
+                  {operation.swap
+                    ? "⇄ XLM → USDC"
+                    : `↗ ${operation.recipientName}`}
                 </span>
                 <span className="shrink-0 tabular-nums">
                   {operation.amount} XLM
                 </span>
               </span>
               <span className="mt-1 block text-[11px] text-muted-foreground">
-                {operationLabels[operation.state]}
+                {
+                  (operation.swap ? swapLabels : operationLabels)[
+                    operation.state
+                  ]
+                }
               </span>
             </summary>
-            <TransferCard operation={operation} userId={userId} />
+            {operation.swap ? (
+              <SwapCard operation={operation} userId={userId} />
+            ) : (
+              <TransferCard operation={operation} userId={userId} />
+            )}
           </details>
         ))}
       </div>

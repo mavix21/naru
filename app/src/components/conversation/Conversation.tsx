@@ -27,7 +27,7 @@ import { SocialEvent } from "@/components/social/SocialEvent";
 import { Badge } from "@/components/ui/badge";
 import { Bubble, BubbleContent } from "@/components/ui/bubble";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { Marker, MarkerContent } from "@/components/ui/marker";
 import {
   Message,
@@ -42,11 +42,17 @@ import {
   MessageScrollerProvider,
   MessageScrollerViewport,
 } from "@/components/ui/message-scroller";
+import { useAccountStatus } from "@/hooks/useAccountStatus";
 import { useMessageDraft } from "@/hooks/useMessageDraft";
 import { conversationRequest } from "@/lib/conversation/client";
 import { mentionMetadata, type Mention } from "@/lib/mentions";
+import { displayAmount } from "@/lib/money";
 
+import { SwapCard } from "./SwapCard";
+import { FundingResult, TestFunding } from "./TestFunding";
 import { TransferCard } from "./TransferCard";
+import { WalletAddress } from "./WalletAddress";
+import { WalletBalances } from "./WalletBalances";
 
 type Snapshot = FunctionReturnType<typeof api.conversations.current>;
 
@@ -73,54 +79,75 @@ const inactive = z.object({ active: z.literal(false) });
 
 const balance = z.object({
   active: z.literal(true),
-  amount: z.string(),
+  amount: z.string().nullable(),
+  address: z.string().optional(),
+  balanceError: z.string().nullable().optional(),
   asset: z.literal("XLM"),
   observedAt: z.iso.datetime(),
+  usdcAmount: z.string().nullable().optional(),
+  usdcError: z.string().nullable().optional(),
 });
 
 function BalanceResult({
   output,
   activation,
+  userId,
 }: {
   output: unknown;
   activation: ReactNode;
+  userId: string;
 }) {
   if (inactive.safeParse(output).success) return activation;
   const result = balance.safeParse(output);
 
   if (!result.success) return null;
-  const value = result.data;
+
+  return <BalanceCard initial={result.data} userId={userId} />;
+}
+
+function BalanceCard({
+  initial,
+  userId,
+}: {
+  initial: z.infer<typeof balance>;
+  userId: string;
+}) {
+  const query = useAccountStatus(userId);
+  const current = query.data;
+
+  const value =
+    current?.state === "ready" && current.account
+      ? {
+          ...initial,
+          address: current.account,
+          amount:
+            current.balance === null ? null : displayAmount(current.balance),
+          balanceError: current.balanceError,
+          usdcAmount:
+            current.usdcBalance == null
+              ? null
+              : displayAmount(current.usdcBalance),
+          usdcError: current.usdcBalanceError,
+        }
+      : initial;
 
   return (
-    <Card className="my-5 w-full max-w-sm">
-      <CardHeader className="flex flex-row items-center justify-between">
-        <div className="flex items-center gap-3">
-          <span
-            aria-hidden="true"
-            className="flex size-9 shrink-0 items-center justify-center rounded-full bg-foreground text-background"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              fill="currentColor"
-              className="size-5"
-              focusable="false"
-            >
-              <path d="M12.003 1.716c-1.37 0-2.7.27-3.948.78A10.18 10.18 0 0 0 2.66 7.901a10.136 10.136 0 0 0-.797 3.954c0 .258.01.516.027.775a1.942 1.942 0 0 1-1.055 1.88L0 14.934v1.902l2.463-1.26.072-.032v.005l.77-.39.758-.385.066-.039 14.807-7.56 1.666-.847 3.392-1.732V2.694L17.792 5.86 3.744 13.025l-.104.055-.017-.115a8.286 8.286 0 0 1-.071-1.105c0-2.255.88-4.377 2.474-5.977a8.462 8.462 0 0 1 2.71-1.82 8.513 8.513 0 0 1 3.2-.654h.067a8.41 8.41 0 0 1 4.09 1.055l1.628-.83.126-.066a10.11 10.11 0 0 0-5.845-1.853zM24 7.143 5.047 16.808l-1.666.847L0 19.382v1.902l3.282-1.671 2.91-1.485 14.058-7.153.105-.055.016.115c.05.369.072.743.072 1.11 0 2.255-.88 4.383-2.475 5.978a8.461 8.461 0 0 1-2.71 1.82 8.305 8.305 0 0 1-3.2.654h-.06c-1.441 0-2.86-.369-4.102-1.061l-.066.033-1.683.857c.594.418 1.232.776 1.903 1.062a10.11 10.11 0 0 0 3.947.797 10.09 10.09 0 0 0 7.17-2.975 10.136 10.136 0 0 0 2.969-7.18c0-.259-.005-.523-.027-.781a1.942 1.942 0 0 1 1.055-1.88L24 9.044z" />
-            </svg>
-          </span>
-          <CardTitle>Balance</CardTitle>
-        </div>
-        <Badge variant="secondary">
-          <span className="sr-only">Stellar </span>Testnet
-        </Badge>
-      </CardHeader>
+    <Card size="sm" className="my-3 w-full max-w-sm">
       <CardContent>
-        <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-          <span className="min-w-0 text-5xl leading-none font-medium tracking-tighter break-all tabular-nums">
-            {value.amount}
-          </span>{" "}
-          <span className="text-base text-muted-foreground">{value.asset}</span>
-        </p>
+        <div className="flex items-center justify-between gap-3">
+          <CardTitle>Balance</CardTitle>
+          <Badge variant="secondary">
+            <span className="sr-only">Stellar </span>Testnet
+          </Badge>
+        </div>
+        {value.address && <WalletAddress address={value.address} />}
+        <WalletBalances
+          xlm={value.amount}
+          usdc={value.usdcAmount ?? null}
+          xlmError={value.balanceError}
+          usdcError={value.usdcError}
+        />
+        <TestFunding userId={userId} />
       </CardContent>
     </Card>
   );
@@ -182,16 +209,10 @@ export function Conversation({
 
   const saved = useMemo(
     () =>
-      records.map((row) => {
-        // SAFETY: UIMessage content is written only by trusted conversation and
-        // event functions. Social references below come from validated DB fields.
-        const message = JSON.parse(row.content) as ConversationMessage;
-
-        return {
-          ...message,
-          metadata: { mentions: row.mentions ?? [], socialEvent: row.event },
-        };
-      }),
+      records.map((row): ConversationMessage => ({
+        ...row.message,
+        metadata: { mentions: row.mentions ?? [], socialEvent: row.event },
+      })),
     [records],
   );
 
@@ -394,7 +415,7 @@ export function Conversation({
   const presenceText = pending
     ? "Waiting for network confirmation"
     : delight
-      ? "Last transfer sent and confirmed."
+      ? "Last operation confirmed."
       : latest?.state === "awaiting_approval"
         ? "A moment to review."
         : streaming || serverBusy
@@ -446,6 +467,17 @@ export function Conversation({
                         onClick={() => void submit("What’s my balance?")}
                       >
                         Check my balance <span aria-hidden="true">↗</span>
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={!hydrated || streaming || serverBusy}
+                        onClick={() =>
+                          void submit("Add free test XLM to my wallet.")
+                        }
+                      >
+                        Get free test XLM <span aria-hidden="true">↗</span>
                       </Button>
                       <Button
                         type="button"
@@ -588,11 +620,28 @@ export function Conversation({
                                         key={index}
                                         output={part.output}
                                         activation={activation}
+                                        userId={userId}
                                       />
                                     );
 
                                   if (
-                                    part.type === "tool-prepareTransfer" &&
+                                    part.type === "tool-fundWallet" &&
+                                    "state" in part &&
+                                    part.state === "output-available" &&
+                                    "output" in part
+                                  )
+                                    return (
+                                      <FundingResult
+                                        key={index}
+                                        output={part.output}
+                                        userId={userId}
+                                        activation={activation}
+                                      />
+                                    );
+
+                                  if (
+                                    (part.type === "tool-prepareTransfer" ||
+                                      part.type === "tool-prepareSwap") &&
                                     "state" in part &&
                                     part.state === "output-available" &&
                                     "output" in part &&
@@ -609,18 +658,27 @@ export function Conversation({
                                 (operation) =>
                                   operation.messageId === message.id,
                               )
-                              .map((operation) => (
-                                <TransferCard
-                                  key={operation._id}
-                                  operation={operation}
-                                  userId={userId}
-                                  onUpdate={onOperationUpdate}
-                                  onEditRecipient={(amount) => {
-                                    updateDraft(`Send ${amount} XLM to `);
-                                    composer.current?.focus();
-                                  }}
-                                />
-                              ))}
+                              .map((operation) =>
+                                operation.swap ? (
+                                  <SwapCard
+                                    key={operation._id}
+                                    operation={operation}
+                                    userId={userId}
+                                    onUpdate={onOperationUpdate}
+                                  />
+                                ) : (
+                                  <TransferCard
+                                    key={operation._id}
+                                    operation={operation}
+                                    userId={userId}
+                                    onUpdate={onOperationUpdate}
+                                    onEditRecipient={(amount) => {
+                                      updateDraft(`Send ${amount} XLM to `);
+                                      composer.current?.focus();
+                                    }}
+                                  />
+                                ),
+                              )}
                           </MessageContent>
                         </Message>
                       </MessageScrollerItem>
@@ -686,7 +744,7 @@ export function Conversation({
         <p className="mt-2.5 text-center text-[10px] text-muted-foreground">
           A little company for your money.{" "}
           <span className="whitespace-nowrap">
-            Testnet · you approve every transfer.
+            Practice money · you approve every payment.
           </span>
         </p>
       </div>

@@ -7,6 +7,7 @@ import {
   profileFields,
   sponsorJobKind,
   sponsorJobState,
+  swapTerms,
 } from "./validators";
 
 export default defineSchema({
@@ -24,6 +25,7 @@ export default defineSchema({
     envelope: v.union(v.string(), v.null()),
     ledger: v.union(v.number(), v.null()),
     error: v.union(v.string(), v.null()),
+    result: v.optional(v.string()),
   })
     .index("by_intent", ["id"])
     .index("by_state", ["state"])
@@ -135,6 +137,7 @@ export default defineSchema({
   }).index("by_clerk_user", ["clerkUserId"]),
   conversations: defineTable({
     clerkUserId: v.string(),
+    agentThreadId: v.optional(v.string()),
     sequence: v.number(),
     activeTurn: v.union(v.string(), v.null()),
     activeUntil: v.number(),
@@ -146,7 +149,7 @@ export default defineSchema({
     messageId: v.string(),
     sequence: v.number(),
     role: v.union(v.literal("user"), v.literal("assistant")),
-    content: v.string(),
+    agentMessageIds: v.array(v.string()),
     mentions: v.optional(v.array(mentionValidator)),
     event: v.optional(
       v.object({
@@ -176,6 +179,8 @@ export default defineSchema({
     token: v.string(),
     amount: v.string(),
     units: v.string(),
+    swap: v.optional(swapTerms),
+    receivedUnits: v.optional(v.string()),
     revision: v.number(),
     state: v.union(
       v.literal("awaiting_approval"),
@@ -213,6 +218,8 @@ export default defineSchema({
     ),
     balance: v.union(v.string(), v.null()),
     balanceError: v.union(v.string(), v.null()),
+    usdcBalance: v.optional(v.union(v.string(), v.null())),
+    usdcBalanceError: v.optional(v.union(v.string(), v.null())),
     job: v.union(
       v.object({
         state: v.string(),

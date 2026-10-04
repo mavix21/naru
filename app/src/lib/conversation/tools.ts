@@ -8,11 +8,17 @@ import { tool } from "ai";
 import { fetchMutation, fetchQuery } from "convex/nextjs";
 import { z } from "zod";
 
+import type { PaymentState } from "@/lib/smart-account/payments";
+
 import { serverKey } from "@/lib/auth/server";
 import { displayAmount, parseAmount } from "@/lib/money";
-import { readPaymentStatus } from "@/lib/smart-account/server/payments-http";
+import {
+  fundPayment,
+  readPaymentStatus,
+} from "@/lib/smart-account/server/payments-http";
 import { SmartAccountService } from "@/lib/smart-account/server/service";
-import { TESTNET } from "@/lib/smart-account/shared";
+import { TESTNET, TEST_FUNDING } from "@/lib/smart-account/shared";
+import { prepareSwapReview } from "@/lib/swaps/server";
 
 export function moneyTools(
   getToken: () => Promise<string>,
@@ -20,6 +26,7 @@ export function moneyTools(
   selectedIds: Set<string>,
   requests: FunctionReturnType<typeof api.splits.context>,
   userText: string,
+  requireFundingAccess: () => Promise<void>,
 ) {
   const requireSelected = (id: string) => {
     if (!selectedIds.has(id))
@@ -34,7 +41,7 @@ export function moneyTools(
   return {
     readBalance: tool({
       description:
-        "Read this authenticated user’s actual Stellar testnet XLM balance. Never infer a balance from conversation text.",
+        "Show this authenticated user’s wallet: its full public address, copy button, actual Stellar Testnet XLM and official USDC balances, and free test-XLM funding button. Use for balance, wallet address, public key, receiving details, or how to find their wallet. The address is public and safe to show to its owner, not a private key or passkey. A null balance is unavailable, not zero. Never infer an address or balance from conversation text.",
       inputSchema: z.object({}).strict(),
       execute: async () => {
         const token = await getToken();
@@ -42,27 +49,147 @@ export function moneyTools(
 
         if (payment?.state !== "ready" || !payment.account)
           return { active: false, activationPath: "/activate" };
-        const service = new SmartAccountService();
+        let current: PaymentState;
 
-        const current = await readPaymentStatus(service, token, null);
+        try {
+          current = await readPaymentStatus(
+            new SmartAccountService(),
+            token,
+            null,
+          );
+        } catch {
+          current = {
+            state: "ready",
+            account: payment.account,
+            job: null,
+            balance: null,
+            balanceError:
+              "Your balance couldn’t refresh. Your wallet address is still available.",
+            usdcBalance: null,
+            usdcBalanceError: "USDC balance is unavailable. Please refresh.",
+          };
+        }
 
         if (current.state !== "ready")
           return { active: false, activationPath: "/activate" };
 
-        if (current.balance === null)
-          throw new Error(
-            current.balanceError ||
-              "The current balance is unavailable. Please refresh Account.",
-          );
-        const units = current.balance;
-
         return {
           active: true,
-          amount: displayAmount(units),
+          address: payment.account,
+          amount:
+            current.balance === null ? null : displayAmount(current.balance),
+          balanceError: current.balanceError,
           asset: "XLM",
+          usdcAmount:
+            current.usdcBalance == null
+              ? null
+              : displayAmount(current.usdcBalance),
+          usdcError: current.usdcBalanceError ?? null,
           network: "Stellar testnet",
           observedAt: new Date().toISOString(),
         };
+      },
+    }),
+    fundWallet: tool({
+      description: `Add ${TEST_FUNDING.label} free test XLM to the authenticated user’s own Naru wallet when they ask for test funds, a refill, or Friendbot. Repeatable after a completed top-up. This submits a sponsor-funded Testnet deposit; it never spends the user’s money and needs no passkey. Accepts no recipient or amount. Do not call merely for a balance/address question. A pending result is not success; the funding card checks confirmation automatically.`,
+      inputSchema: z.object({}).strict(),
+      execute: async () => {
+        try {
+          await requireFundingAccess();
+          const token = await getToken();
+          const payment = await fetchQuery(api.payments.current, {}, { token });
+
+          if (payment?.state !== "ready" || !payment.account)
+            return { active: false, activationPath: "/activate" };
+
+          const result = await fundPayment(
+            new SmartAccountService(),
+            token,
+            `chat:${messageId}`,
+          );
+
+          return {
+            active: true,
+            ...result,
+            instruction:
+              "Show the funding card and at most one short sentence. Only say XLM was added if funding.state is confirmed. If failed, briefly report the failure. Never call this tool again to check status. Do not repeat card contents or explain Testnet unless asked.",
+          };
+        } catch (error) {
+          return {
+            error:
+              error instanceof Error
+                ? error.message
+                : "Test funding is unavailable. Try again shortly.",
+          };
+        }
+      },
+    }),
+    prepareSwap: tool({
+      description:
+        "Prepare ONE live XLM → USDC swap quote on Stellar Testnet when the user requests a swap. Accept either an XLM amount to spend or a USDC amount to receive. For 'I want 1 USDC; swap as much XLM as needed', pass amount='1' and amountType='receive'; the server calculates the XLM cost from live quotes and protects the USDC target. Do not ask for an XLM amount when the receive amount is known. This cannot sign or execute. No other assets, reverse direction, or destination are supported. The user must review the quote card and explicitly authorize with a passkey. Never substitute tokens or estimate a quote yourself.",
+      inputSchema: z
+        .object({
+          amount: z
+            .string()
+            .max(40)
+            .describe(
+              "The user-specified decimal amount, without an asset symbol.",
+            ),
+          amountType: z
+            .enum(["spend", "receive"])
+            .describe(
+              "spend = XLM to sell; receive = USDC to obtain with XLM.",
+            ),
+          assetIn: z.string().max(12),
+          assetOut: z.string().max(12),
+        })
+        .strict(),
+      execute: async ({ amount, amountType, assetIn, assetOut }) => {
+        if (assetIn !== "XLM" || assetOut !== "USDC")
+          return {
+            error:
+              "Only XLM → official Testnet USDC swaps are supported. Ask before changing assets.",
+          };
+        const token = await getToken();
+        const payment = await fetchQuery(api.payments.current, {}, { token });
+
+        if (payment?.state !== "ready" || !payment.account)
+          return { active: false, activationPath: "/activate" };
+        const service = new SmartAccountService();
+
+        try {
+          const prepared = await prepareSwapReview(
+            service,
+            payment.account,
+            amount,
+            amountType,
+          );
+
+          const operationId = await fetchMutation(
+            api.operations.prepareSwap,
+            {
+              key: serverKey(),
+              messageId,
+              account: payment.account,
+              token: service.config.publicConfig.token,
+              ...prepared,
+            },
+            { token: await getToken() },
+          );
+
+          return {
+            operationId,
+            instruction:
+              "Briefly ask the user to review the live swap card. Do not print the internal operationId or duplicate quote amounts in chat text. Nothing has been swapped. Only the user can confirm its displayed quote with a passkey.",
+          };
+        } catch (error) {
+          return {
+            error:
+              error instanceof Error
+                ? error.message
+                : "No live swap quote is available. Nothing was prepared.",
+          };
+        }
       },
     }),
     prepareTransfer: tool({

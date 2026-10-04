@@ -155,7 +155,7 @@ export async function deliver(
       messageId,
       sequence: conversation.sequence + 1,
       role: "assistant",
-      content: JSON.stringify({ id: messageId, role: "assistant", parts: [] }),
+      agentMessageIds: [],
       event,
     });
     await ctx.db.patch(conversation._id, {

@@ -81,7 +81,7 @@ export const accountJobs = query({
     requireServer(args.key);
 
     const jobs = await Promise.all(
-      (["deploy", "fund", "transfer"] as const).map((kind) => {
+      (["deploy", "fund", "transfer", "swap"] as const).map((kind) => {
         const rows = ctx.db
           .query("sponsorJobs")
           .withIndex("by_account_kind", (q) =>
@@ -89,7 +89,7 @@ export const accountJobs = query({
           )
           .order("desc");
 
-        return kind === "transfer" ? rows.take(20) : rows.collect();
+        return kind === "deploy" ? rows.collect() : rows.take(20);
       }),
     );
 
@@ -117,7 +117,7 @@ export const insert = mutation({
         existing.kind !== args.kind ||
         existing.func !== args.func ||
         existing.auth !== args.auth ||
-        existing.expires !== args.expires
+        (args.kind !== "fund" && existing.expires !== args.expires)
       )
         throw new ConvexError(
           "Transaction intent already exists with different data.",
@@ -129,17 +129,32 @@ export const insert = mutation({
     if (args.expires <= Date.now())
       throw new ConvexError("Review expired. Prepare a new transaction.");
 
-    if (args.kind !== "transfer") {
+    if (args.kind === "deploy" || args.kind === "fund") {
       const previous = await ctx.db
         .query("sponsorJobs")
         .withIndex("by_account_kind", (q) =>
           q.eq("account", args.account).eq("kind", args.kind),
         )
-        .filter((q) => q.neq(q.field("state"), "failed"))
+        .filter((q) =>
+          args.kind === "fund"
+            ? q.and(
+                q.neq(q.field("state"), "failed"),
+                q.neq(q.field("state"), "confirmed"),
+              )
+            : q.neq(q.field("state"), "failed"),
+        )
         .first();
 
       if (previous && !(await expirePreparation(ctx, previous))) {
-        if (previous.func !== args.func)
+        // Funding is repeatable once confirmed, but simultaneous requests from
+        // chat and Account must share the same in-flight top-up.
+        if (
+          args.kind === "fund" &&
+          (previous.state !== "review" || previous.expires > Date.now())
+        )
+          return previous;
+
+        if (args.kind !== "fund" && previous.func !== args.func)
           throw new ConvexError(
             "Existing transaction has different invocation data.",
           );
@@ -251,7 +266,8 @@ export const pending = mutation({
       !job ||
       job.state !== "preparing" ||
       job.preparingUntil === null ||
-      job.preparingUntil <= Date.now()
+      job.preparingUntil <= Date.now() ||
+      (job.kind === "swap" && job.expires <= Date.now())
     )
       throw new ConvexError("Submission reservation was lost.");
 
@@ -272,6 +288,7 @@ export const finish = mutation({
     state: v.union(v.literal("confirmed"), v.literal("failed")),
     ledger: v.union(v.number(), v.null()),
     error: v.union(v.string(), v.null()),
+    result: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     requireServer(args.key);
@@ -301,6 +318,7 @@ export const finish = mutation({
       state: args.state,
       ledger: args.ledger,
       error: args.error,
+      result: args.result,
       preparingUntil: null,
     });
   },

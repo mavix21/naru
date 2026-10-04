@@ -1,7 +1,7 @@
 import "server-only";
 import { Asset, hash, Keypair, StrKey } from "@stellar/stellar-sdk";
 
-import { TESTNET, type SmartAccountConfig } from "../shared";
+import { TESTNET, TEST_FUNDING, type SmartAccountConfig } from "../shared";
 
 export function serverConfig() {
   const origin = new URL(
@@ -55,7 +55,7 @@ export function serverConfig() {
     sponsor: sponsor.publicKey(),
     token: Asset.native().contractId(TESTNET.networkPassphrase),
     transferAmount: "0.1",
-    fundingAmount: "5",
+    fundingAmount: TEST_FUNDING.amount,
   };
 
   return { sponsor, publicConfig };

@@ -1,5 +1,7 @@
 import { Address, Contract, nativeToScVal, xdr } from "@stellar/stellar-sdk";
 
+import { TEST_FUNDING } from "../shared";
+
 export function buildFundingTransfer(
   token: string,
   sponsor: string,
@@ -10,7 +12,7 @@ export function buildFundingTransfer(
       "transfer",
       Address.fromString(sponsor).toScVal(),
       Address.fromString(account).toScVal(),
-      nativeToScVal(BigInt(50_000_000), { type: "i128" }),
+      nativeToScVal(BigInt(TEST_FUNDING.units), { type: "i128" }),
     )
     .body()
     .invokeHostFunctionOp()

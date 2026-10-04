@@ -150,6 +150,89 @@ Para desarrollar también los contratos del workspace, instala Rust, Stellar CLI
 y Stellar Scaffold CLI, inicia Docker y usa `pnpm dev` desde la raíz.
 Comprobaciones disponibles: `pnpm lint`, `pnpm typecheck` y `pnpm build`.
 
+### Swaps XLM → USDC en Testnet
+
+1. Obtén una clave en [Soroswap API](https://api.soroswap.finance/login) y añade
+   `NARU_SOROSWAP_API_KEY` a `app/.env.local` (o a las variables de Vercel).
+   Es una credencial **solo de servidor**. Configura el perfil de partner sin
+   comisión adicional: las cotizaciones con partner fee se rechazan.
+2. Publica el esquema y las funciones actualizadas con
+   `pnpm --dir backend exec convex dev --once`. Se reutilizan Clerk, Convex,
+   la cuenta inteligente, su passkey y el patrocinador ya configurados.
+3. Ejecuta `pnpm --dir app swaps:check`: verifica red, contratos, identidad de
+   los activos, reservas del pool y una cotización real para 1 XLM. Es una
+   comprobación de lectura; no envía transacciones. Si usas otro archivo de
+   entorno, exporta sus variables antes de ejecutar el comando.
+4. En el chat pide «Cambia 1 XLM por USDC». Revisa la estimación, el mínimo,
+   los costes y la caducidad. **Confirm with passkey** autoriza esa cotización.
+   Una cotización caducada requiere **Get new quote** y otra confirmación.
+5. Espera **Swapped · confirmed**, abre el recibo en Stellar Expert y comprueba
+   los saldos XLM/USDC en Account. Un hash pendiente no significa éxito.
+
+Se usa USDC oficial de Testnet, con 7 decimales:
+
+- Emisor: `GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5`.
+- Contrato: `CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA`.
+- XLM: `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC`.
+
+La identidad se deriva usando la passphrase Testnet y se verifica en cadena.
+No se usa el token distinto etiquetado como USDC en el quickstart de Soroswap.
+Las identidades oficiales se documentan en
+[Stellar Docs](https://developers.stellar.org/docs/build/agentic-payments/x402#testnet-usdc).
+Los contratos y hashes permitidos están en `app/src/lib/swaps/shared.ts`,
+contrastados con el [deployment de Soroswap](https://github.com/soroswap/core/blob/main/public/testnet.contracts.json).
+Un reset de Testnet o un cambio de código pausa los swaps hasta revisar esas
+identidades; no se aceptan contratos nuevos automáticamente.
+
+El servidor solicita `/quote?network=testnet` con `protocols: ["soroswap"]`,
+una ruta directa y 50 bps de tolerancia (0,5%). Si el API responde exactamente
+**No path found**, verifica nuevamente el pool y consulta
+`router_get_amounts_out` en el router Soroswap desplegado. Esta cotización
+proviene de la cadena en vivo; su ledger y origen quedan guardados, y la
+tarjeta la identifica como **Soroswap · live on-chain quote**. Errores de
+credenciales, respuestas inválidas y rutas no permitidas se rechazan.
+Construye la llamada al router
+verificado a partir de la cotización, sin confiar en XDR externo ni abrir una
+wallet externa. La comisión del pool (0,3%) está incluida; Naru patrocina la
+red con un máximo de 0,5 XLM. Solo se autoriza el router y una transferencia
+exacta de XLM al pool verificado. El destino de USDC es la propia cuenta.
+La expiración de dos minutos también limita la transacción y el contrato.
+
+Pruebas enfocadas: `pnpm --dir app test` y `pnpm --dir backend test`.
+Cubren importes enteros, activos/rutas incorrectos, árboles de autorización
+alterados, caducidad, cambio de cotización, aislamiento por usuario y
+reservas idempotentes. Las fixtures de prueba nunca generan cotizaciones
+en la aplicación. No se sustituye USDC ni se inventa una cotización: el
+fallback consulta el contrato Soroswap verificado. Una passkey rechazada no envía el swap;
+una transacción pendiente se reconcilia por su mismo hash, sin repetirla.
+
+**Validación end-to-end del 4 de octubre de 2026:** se confirmó un swap real
+de **1 XLM → 0,1057259 USDC**, mínimo **0,1051973 USDC**, en el ledger
+**5013745**. Se recorrió el chat, la tarjeta, autorización WebAuthn virtual en
+Chromium, envío patrocinado y recibo; los saldos pasaron de 5 a 4 XLM y de
+0 a 0,1057259 USDC en una cuenta de prueba aislada. Una consulta RPC
+independiente verificó `SUCCESS`.
+
+[Transacción confirmada: 173a183f11ed5d7ea05babcacf096c6738111aff717dd0a7249045ad11e361ff](https://stellar.expert/explorer/testnet/tx/173a183f11ed5d7ea05babcacf096c6738111aff717dd0a7249045ad11e361ff).
+
+El script reproducible confirmó una segunda ejecución en el ledger **5013837**:
+[9a2b45593c0f594e10dbc758ba20727d016a7f6ed10bb95d60a217b9ea9afb4c](https://stellar.expert/explorer/testnet/tx/9a2b45593c0f594e10dbc758ba20727d016a7f6ed10bb95d60a217b9ea9afb4c).
+Reenviar la misma autorización devolvió el mismo recibo sin cambiar los saldos;
+se verificó la prevención de ejecución duplicada en la ruta autenticada real.
+
+El API no encontraba la ruta porque su lista de pools Testnet estaba vacía;
+se utilizó el fallback on-chain explícito con los mismos activos oficiales.
+También se validaron el matcher de Clerk para `/api/swaps` y los dos contextos
+de autorización del swap (router + transferencia XLM), ambos con la regla
+de passkey existente.
+
+Para repetir la prueba real, inicia `pnpm --dir app dev`, instala Chromium con
+`pnpm --dir app exec playwright install chromium` y ejecuta
+`NARU_SWAP_E2E_DIR=/ruta/privada/fuera/del/repo pnpm --dir app test:swap:e2e`.
+El script usa Clerk Development y localhost, crea o reutiliza una cuenta de
+prueba, y ejecuta un swap de 1 XLM con una passkey virtual. Guarda capturas y
+el estado privado del navegador/passkey en ese directorio; no lo publiques.
+
 ## Desplegar en Vercel
 
 1. Configura las variables de `app/.env.example` en Vercel. Usa

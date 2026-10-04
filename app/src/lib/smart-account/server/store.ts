@@ -71,6 +71,7 @@ export class SponsorStore {
     ledger: number | null,
     error: string | null,
     expectedState: RecordEntry["state"],
+    result?: string,
   ) {
     return fetchMutation(api.sponsorship.finish, {
       key: this.key,
@@ -79,6 +80,7 @@ export class SponsorStore {
       ledger,
       error,
       expectedState,
+      result,
     });
   }
 
