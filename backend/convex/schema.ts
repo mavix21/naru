@@ -192,8 +192,8 @@ export default defineSchema({
     messageId: v.string(),
     sequence: v.number(),
     role: v.union(v.literal("user"), v.literal("assistant")),
-    // Compatibility window for the pre-agent production history migration.
-    agentMessageIds: v.optional(v.array(v.string())),
+    agentMessageIds: v.array(v.string()),
+    // Accepted only for legacy snapshot imports; the migration removes this field.
     content: v.optional(v.string()),
     mentions: v.optional(v.array(mentionValidator)),
     event: v.optional(
