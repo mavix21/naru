@@ -50,6 +50,10 @@ export function People({
   const [found, setFound] = useState<PersonIdentity | null>();
   const [editing, setEditing] = useState(false);
 
+  const [tab, setTab] = useState<"requests" | "friends">(() =>
+    data.incoming.length ? "requests" : "friends",
+  );
+
   const [pending, setPending] = useState<"search" | Id<"profiles"> | null>(
     null,
   );
@@ -250,7 +254,8 @@ export function People({
         </output>
       )}
       <Tabs.Root
-        defaultValue={data.incoming.length ? "requests" : "friends"}
+        value={tab}
+        onValueChange={setTab}
         className="flex min-h-0 flex-col gap-3"
       >
         <Tabs.List
