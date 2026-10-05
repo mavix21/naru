@@ -674,6 +674,7 @@ export class SmartAccountService {
         job.kind === "swap" ||
           job.kind === "transfer" ||
           job.kind === "split_create" ||
+          job.kind === "split_pay" ||
           job.kind === "split_keep_alive"
           ? Math.floor(job.expires / 1000)
           : undefined,

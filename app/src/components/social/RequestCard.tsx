@@ -3,6 +3,11 @@
 import type { Doc, Id } from "@naru/backend/data-model";
 
 import { api } from "@naru/backend/api";
+import {
+  IconArrowUpRight,
+  IconMessage,
+  IconReceipt,
+} from "@tabler/icons-react";
 import { useMutation, useQuery } from "convex/react";
 import { useRef, useState } from "react";
 
@@ -12,12 +17,8 @@ import { conversationRequest } from "@/lib/conversation/client";
 
 import { CoinDelivery } from "./CoinDelivery";
 import { PersonAvatar } from "./Person";
-import {
-  ActivationReturn,
-  requestLabels,
-  socialCardClass,
-  SplitCard,
-} from "./SplitCard";
+import { RequestStatus } from "./RequestStatus";
+import { ActivationReturn, socialCardClass, SplitCard } from "./SplitCard";
 
 export function RequestCard({
   id,
@@ -70,53 +71,39 @@ export function RequestCard({
 
   return (
     <article
-      className={socialCardClass}
+      className="my-4 w-full min-w-0 max-w-md overflow-hidden rounded-3xl border border-border/70 bg-card p-5 shadow-sm"
       aria-label={`${split.title} payment request`}
     >
-      <div className="mb-4 flex items-center justify-between text-[10px] text-muted-foreground">
-        <span>
+      <div className="flex items-center justify-between gap-3">
+        <span className="inline-flex items-center gap-1.5 text-[10px] font-medium tracking-[.08em] text-muted-foreground uppercase">
+          <IconReceipt className="size-3.5" aria-hidden="true" />
           {event?.kind === "payment_review"
-            ? "Your payment review"
-            : "Naru to Naru"}
+            ? "Payment review"
+            : "Split request"}
         </span>
-        <span>Stellar testnet · XLM</span>
+        <RequestStatus state={request.state} />
       </div>
-      <div className="flex items-center gap-2">
-        <PersonAvatar person={event?.actor ?? other} />
-        <span aria-hidden="true" className="text-muted-foreground">
-          →
+      <h3 className="mt-4 text-sm font-medium break-words">{split.title}</h3>
+      <p className="mt-1 break-all text-4xl font-medium tracking-[-.05em] tabular-nums">
+        {request.amount}{" "}
+        <span className="text-base font-normal tracking-normal text-muted-foreground">
+          XLM
         </span>
-        <PersonAvatar person={me} />
+      </p>
+      <div className="mt-4 flex items-center gap-2.5">
+        <PersonAvatar person={other} className="size-8" />
+        <div className="min-w-0">
+          <p className="truncate text-xs">
+            <span className="text-muted-foreground">
+              {isOrganizer ? "Requested from " : "Requested by "}
+            </span>
+            <span className="font-medium">{other.displayName}</span>
+          </p>
+          <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
+            @{other.username}
+          </p>
+        </div>
       </div>
-      <p className="mt-4 text-sm leading-6">
-        {event?.kind === "reply" ? (
-          <>
-            {me.companionName} brought a reply from{" "}
-            <strong className="font-medium">{other.displayName}</strong>’s Naru,{" "}
-            {other.companionName}.
-          </>
-        ) : event?.kind === "declined" ? (
-          <>{other.displayName} declined this request.</>
-        ) : event?.kind === "cancelled" ? (
-          <>{other.displayName} cancelled this request.</>
-        ) : event?.kind === "paid" ? (
-          <>Payment confirmed. {me.companionName} has the receipt.</>
-        ) : isOrganizer ? (
-          <>
-            Your request to{" "}
-            <strong className="font-medium">{other.displayName}</strong>, with{" "}
-            {other.companionName}.
-          </>
-        ) : (
-          <>
-            <strong className="font-medium">{other.displayName}</strong>’s Naru,{" "}
-            {other.companionName}, brought {me.companionName} a request.
-          </>
-        )}
-      </p>
-      <p className="mt-1 text-[11px] text-muted-foreground">
-        @{other.username} · {split.title}
-      </p>
       {event?.text && (
         <>
           <blockquote
@@ -130,18 +117,23 @@ export function RequestCard({
           </p>
         </>
       )}
-      <p className="mt-5 text-3xl tracking-tight tabular-nums">
-        {request.amount}{" "}
-        <span className="text-sm text-muted-foreground">XLM</span>
-      </p>
-      <p className="mt-2 text-xs text-muted-foreground">
-        {split.mode === "collect"
-          ? "Collecting before paying"
-          : "Reimbursement · organizer says they already paid"}
-      </p>
-      <output className="mt-4 block text-xs font-medium">
-        {requestLabels[request.state]}
-      </output>
+      <details className="mt-4 border-t border-border/60 pt-3 text-xs text-muted-foreground">
+        <summary className="cursor-pointer">Request details · Testnet</summary>
+        <dl className="mt-3 space-y-2 text-[11px]">
+          <div className="flex justify-between gap-3">
+            <dt>Expense type</dt>
+            <dd className="text-foreground">
+              {split.mode === "collect"
+                ? "Before paying"
+                : "Already paid · reimbursement"}
+            </dd>
+          </div>
+          <div className="flex justify-between gap-3">
+            <dt>Delivered by</dt>
+            <dd className="text-foreground">{other.companionName}</dd>
+          </div>
+        </dl>
+      </details>
       {request.state === "paid" && request.hash && (
         <CoinDelivery
           receipt={`${userId}:${request._id}:${request.hash}`}
@@ -156,7 +148,7 @@ export function RequestCard({
           rel="noreferrer"
           className="mt-2 inline-block text-xs underline"
         >
-          Confirmed transaction ↗
+          View payment receipt ↗
         </a>
       )}
       {error && (
@@ -187,7 +179,7 @@ export function RequestCard({
                 )
               }
             >
-              Pay {request.amount} XLM
+              Pay my share <IconArrowUpRight aria-hidden="true" />
             </Button>
           ) : (
             <ActivationReturn kind="request" id={id} />
@@ -206,17 +198,8 @@ export function RequestCard({
           {review ? "Hide split" : "Review split"}
         </Button>
         <Button size="sm" variant="ghost" onClick={() => setReply("")}>
-          Reply
+          <IconMessage aria-hidden="true" /> Reply
         </Button>
-        {!isOrganizer && request.state === "outstanding" && (
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => setReply("Could we review this split together?")}
-          >
-            Ask to review
-          </Button>
-        )}
         {isOrganizer &&
           (request.state === "outstanding" || request.state === "declined") && (
             <Button
@@ -275,10 +258,6 @@ export function RequestCard({
       {!isOrganizer && operation && (
         <TransferCard operation={operation} userId={userId} />
       )}
-      <p className="mt-4 text-[10px] leading-5 text-muted-foreground">
-        A payment request is not proof you accepted a debt. Only confirmed
-        transfers count as paid.
-      </p>
     </article>
   );
 }

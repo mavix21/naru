@@ -29,7 +29,7 @@ import {
   socialUser,
   throttle,
 } from "./socialShared";
-import { transferAsset } from "./validators";
+import { transferAsset, walletBalances } from "./validators";
 
 const draftFields = {
   title: v.string(),
@@ -160,7 +160,7 @@ export async function requestAccess(ctx: QueryCtx, id: Id<"paymentRequests">) {
 
   if (split.asset === "USDC")
     throw new ConvexError(
-      "This contract request is read-only in its friend DM.",
+      "This contract request is read-only here. Use Pay my share in its friend DM.",
     );
 
   return { me, request, split };
@@ -907,5 +907,275 @@ export const deploymentUsage = query({
       if (row.creation?.contract === contract) counts[row.state]++;
 
     return counts;
+  },
+});
+
+async function contractRequestAccess(
+  ctx: QueryCtx,
+  id: Id<"paymentRequests">,
+  currentContract = true,
+) {
+  const me = await profileFor(ctx, await requireUser(ctx));
+  const request = await ctx.db.get(id);
+
+  if (
+    !me ||
+    !request ||
+    (me._id !== request.organizerId && me._id !== request.participantId)
+  )
+    throw new ConvexError("Request not found.");
+  const split = await ctx.db.get(request.splitId);
+
+  const share = split?.shares.find(
+    (s) => s.person.userId === request.participantId,
+  );
+
+  if (
+    !split ||
+    split.asset !== "USDC" ||
+    split.state !== "sent" ||
+    (currentContract && split.creation?.contract !== NARU_SPLIT.contract) ||
+    !split.creation?.hash ||
+    !split.organizerAccount ||
+    !share?.account ||
+    share.units !== request.units ||
+    request.amount !== displayAmount(share.units) ||
+    split.organizer.userId !== request.organizerId
+  )
+    throw new ConvexError("Verified reimbursement request unavailable.");
+
+  return {
+    me,
+    request,
+    split,
+    intent: {
+      account: share.account,
+      organizer: split.organizerAccount,
+      splitId: split.creation.id,
+      units: share.units,
+    },
+  };
+}
+
+async function requirePayer(ctx: QueryCtx, id: Id<"paymentRequests">) {
+  const terms = await contractRequestAccess(ctx, id);
+
+  if (terms.me._id !== terms.request.participantId)
+    throw new ConvexError(
+      "Only the requested friend can authorize this payment.",
+    );
+  const account = await payment(ctx, terms.me.clerkUserId);
+
+  if (
+    account?.state !== "ready" ||
+    account.account !== terms.intent.account ||
+    !account.credentialId ||
+    !account.publicKey
+  )
+    throw new ConvexError(
+      "Activate or restore this request’s payment account first.",
+    );
+
+  return terms;
+}
+
+export const paymentStatus = query({
+  args: { id: v.id("paymentRequests") },
+  handler: async (ctx, { id }) => {
+    const { request, intent, split } = await contractRequestAccess(
+      ctx,
+      id,
+      false,
+    );
+
+    return {
+      state: request.state,
+      hash: request.hash,
+      error: request.settlement?.error,
+      intent,
+      payable: split.creation?.contract === NARU_SPLIT.contract,
+    };
+  },
+});
+
+export const paymentTerms = query({
+  args: { key: v.string(), id: v.id("paymentRequests") },
+  handler: async (ctx, { key, id }) => {
+    requireServer(key);
+    const { me, ...terms } = await contractRequestAccess(ctx, id);
+
+    return { ...terms, isOrganizer: me._id === terms.request.organizerId };
+  },
+});
+
+export const bindPayment = mutation({
+  args: { key: v.string(), id: v.id("paymentRequests"), reviewId: v.string() },
+  handler: async (ctx, { key, id, reviewId }) => {
+    requireServer(key);
+    const { request, intent } = await requirePayer(ctx, id);
+
+    if (request.state !== "outstanding")
+      throw new ConvexError(
+        "This request is pending, paid, or cancelled. Check its status.",
+      );
+
+    const job = await ctx.db
+      .query("sponsorJobs")
+      .withIndex("by_intent", (q) => q.eq("id", reviewId))
+      .unique();
+
+    if (
+      !job ||
+      job.kind !== "split_pay" ||
+      job.account !== intent.account ||
+      job.state !== "review" ||
+      job.expires <= Date.now()
+    )
+      throw new ConvexError("Payment review unavailable.");
+
+    if (
+      request.settlement?.reviewId &&
+      request.settlement.reviewId !== reviewId
+    ) {
+      const previous = await ctx.db
+        .query("sponsorJobs")
+        .withIndex("by_intent", (q) => q.eq("id", request.settlement!.reviewId))
+        .unique();
+
+      if (previous && previous.state !== "failed") {
+        if (previous.state !== "review")
+          throw new ConvexError("A payment is pending. Check its status.");
+        await ctx.db.patch(previous._id, {
+          state: "failed",
+          error: "Unsubmitted review replaced. Authorization invalidated.",
+        });
+      }
+    }
+
+    await ctx.db.patch(id, { settlement: { reviewId }, updatedAt: Date.now() });
+  },
+});
+
+export const claimPayment = mutation({
+  args: { key: v.string(), id: v.id("paymentRequests"), reviewId: v.string() },
+  handler: async (ctx, { key, id, reviewId }) => {
+    requireServer(key);
+    const { request, intent, me } = await requirePayer(ctx, id);
+
+    if (request.settlement?.reviewId !== reviewId)
+      throw new ConvexError("Payment review changed. Review again.");
+
+    if (request.state === "submitting" || request.state === "paid")
+      return false;
+
+    if (request.state !== "outstanding")
+      throw new ConvexError("This request can no longer be paid.");
+
+    const job = await ctx.db
+      .query("sponsorJobs")
+      .withIndex("by_intent", (q) => q.eq("id", reviewId))
+      .unique();
+
+    if (
+      !job ||
+      job.kind !== "split_pay" ||
+      job.account !== intent.account ||
+      job.state !== "review" ||
+      job.expires <= Date.now()
+    )
+      throw new ConvexError("Payment review expired. Review again.");
+    await throttle(ctx, `split-payment:${me._id}`, 10, 3_600_000);
+    await ctx.db.patch(id, { state: "submitting", updatedAt: Date.now() });
+
+    return true;
+  },
+});
+
+export const reportPayment = mutation({
+  args: {
+    key: v.string(),
+    id: v.id("paymentRequests"),
+    reviewId: v.string(),
+    paidLedger: v.optional(v.number()),
+    balances: v.optional(
+      v.object({ sender: walletBalances, recipient: walletBalances }),
+    ),
+  },
+  handler: async (ctx, args) => {
+    requireServer(args.key);
+
+    const { request, split, intent } = await contractRequestAccess(
+      ctx,
+      args.id,
+    );
+
+    if (request.settlement?.reviewId !== args.reviewId)
+      throw new ConvexError("Payment review changed.");
+
+    if (request.state === "paid") return;
+
+    if (request.state !== "submitting")
+      throw new ConvexError("Payment was not authorized.");
+
+    const job = await ctx.db
+      .query("sponsorJobs")
+      .withIndex("by_intent", (q) => q.eq("id", args.reviewId))
+      .unique();
+
+    if (!job || job.kind !== "split_pay" || job.account !== intent.account)
+      throw new ConvexError("Payment evidence unavailable.");
+
+    if (job.state === "confirmed") {
+      if (
+        !job.hash ||
+        !job.envelope ||
+        !job.ledger ||
+        args.paidLedger !== job.ledger
+      )
+        throw new ConvexError("Verified share settlement is required.");
+      await ctx.db.patch(request._id, {
+        state: "paid",
+        hash: job.hash,
+        settlement: { reviewId: job.id },
+        updatedAt: Date.now(),
+      });
+      await ctx.db.patch(split._id, {
+        shares: split.shares.map((share) => ({
+          ...share,
+          requestState:
+            share.person.userId === request.participantId
+              ? ("paid" as const)
+              : share.requestState,
+        })),
+        updatedAt: Date.now(),
+      });
+
+      if (args.balances) {
+        for (const [profileId, expected, balances] of [
+          [request.participantId, intent.account, args.balances.sender],
+          [request.organizerId, intent.organizer, args.balances.recipient],
+        ] as const) {
+          if (balances.account !== expected)
+            throw new ConvexError("Payment balances changed account.");
+          const profile = (await ctx.db.get(profileId))!;
+          const wallet = await payment(ctx, profile.clerkUserId);
+
+          if (wallet?.account === expected)
+            await ctx.db.patch(wallet._id, {
+              ...balances,
+              updatedAt: Date.now(),
+            });
+        }
+      }
+    } else if (job.state === "failed") {
+      await ctx.db.patch(request._id, {
+        state: "outstanding",
+        settlement: {
+          reviewId: job.id,
+          error: job.error ?? "Payment failed. Review again.",
+        },
+        updatedAt: Date.now(),
+      });
+    }
   },
 });

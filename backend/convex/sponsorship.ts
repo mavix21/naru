@@ -88,6 +88,7 @@ export const accountJobs = query({
           "transfer",
           "swap",
           "split_create",
+          "split_pay",
           "split_keep_alive",
         ] as const
       ).map((kind) => {
@@ -279,6 +280,7 @@ export const pending = mutation({
       ((job.kind === "swap" ||
         job.kind === "transfer" ||
         job.kind === "split_create" ||
+        job.kind === "split_pay" ||
         job.kind === "split_keep_alive") &&
         job.expires <= Date.now())
     )

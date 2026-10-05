@@ -394,6 +394,10 @@ export function DirectConversation({
             <div className="mt-auto">
               {messages.map((message, index) => {
                 const own = message.author.profileId === detail.me;
+
+                const splitRequest =
+                  message.kind === "split_request" && !!message.requestId;
+
                 const before = messages[index - 1];
 
                 const newDay =
@@ -432,15 +436,37 @@ export function DirectConversation({
                     >
                       <div
                         className={cn(
-                          "max-w-[86%] rounded-2xl px-3.5 py-2.5 md:max-w-[75%]",
-                          own
-                            ? "rounded-br-md bg-primary/[.09]"
-                            : "rounded-bl-md border border-border/50 bg-background",
+                          "min-w-0 max-w-[92%] md:max-w-[75%]",
+                          splitRequest
+                            ? ""
+                            : own
+                              ? "rounded-br-md bg-primary/[.09]"
+                              : "rounded-bl-md border border-border/50 bg-background",
+                          !splitRequest && "rounded-2xl px-3.5 py-2.5",
                         )}
                       >
                         {message.kind === "split_request" &&
                         message.requestId ? (
-                          <SplitRequestMessage id={message.requestId} />
+                          <SplitRequestMessage
+                            id={message.requestId}
+                            own={own}
+                            friend={detail.person}
+                            userId={userId}
+                            activationPath={`/activate?returnTo=${encodeURIComponent(`/home?chat=${conversationId}`)}`}
+                            onReply={
+                              detail.canSend && hydrated
+                                ? (description) => {
+                                    updateDraft((current) => ({
+                                      ...current,
+                                      text: current.text.trim()
+                                        ? current.text
+                                        : `About “${description}”: `,
+                                    }));
+                                    composer.current?.focus();
+                                  }
+                                : undefined
+                            }
+                          />
                         ) : message.kind === "transfer" && message.transfer ? (
                           <article
                             aria-label={
@@ -474,7 +500,12 @@ export function DirectConversation({
                             {message.text}
                           </p>
                         )}
-                        <div className="mt-1 flex items-center justify-end gap-1 text-[10px] text-muted-foreground">
+                        <div
+                          className={cn(
+                            "mt-1 flex items-center justify-end gap-1 text-[10px] text-muted-foreground",
+                            splitRequest && "px-2",
+                          )}
+                        >
                           <time
                             dateTime={new Date(
                               message._creationTime,

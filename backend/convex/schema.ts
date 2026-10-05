@@ -197,6 +197,12 @@ export default defineSchema({
     operationId: v.optional(v.id("operations")),
     hash: v.optional(v.string()),
     directMessageId: v.optional(v.id("directMessages")),
+    settlement: v.optional(
+      v.object({
+        reviewId: v.string(),
+        error: v.optional(v.string()),
+      }),
+    ),
     updatedAt: v.number(),
   })
     .index("by_split", ["splitId"])

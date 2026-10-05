@@ -27,6 +27,7 @@ export const jobSchema = z.object({
     "transfer",
     "swap",
     "split_create",
+    "split_pay",
     "split_keep_alive",
   ]),
   state: z.enum(["review", "preparing", "pending", "confirmed", "failed"]),

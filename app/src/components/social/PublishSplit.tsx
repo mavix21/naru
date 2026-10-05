@@ -3,8 +3,10 @@
 import type { Doc } from "@naru/backend/data-model";
 
 import { useAuth } from "@clerk/nextjs";
+import { IconCheck, IconFingerprint, IconLoader2 } from "@tabler/icons-react";
 import { useEffect, useState } from "react";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { conversationRequest } from "@/lib/conversation/client";
 import { creationReviewSchema } from "@/lib/splits/policy";
@@ -58,7 +60,7 @@ export function PublishSplit({
   async function publish() {
     if (busy || !userId) return;
     setError(undefined);
-    setBusy("Opening your passkey…");
+    setBusy("Opening passkey…");
     onBusyChange?.(true);
     let submitting = false;
 
@@ -96,7 +98,7 @@ export function PublishSplit({
             split.shares.some((s) => !s.account)
           )
             throw new Error("Save and review the participant accounts first.");
-          setBusy("Authorize this request with your passkey…");
+          setBusy("Approve with passkey…");
 
           const auth = await account.signCreation(review, {
             account: split.organizerAccount,
@@ -106,7 +108,7 @@ export function PublishSplit({
           });
 
           submitting = true;
-          setBusy("Publishing authorized requests…");
+          setBusy("Sending requests…");
           await conversationRequest(userId, "/api/splits", {
             action: "authorize",
             id: split._id,
@@ -136,19 +138,35 @@ export function PublishSplit({
   }
 
   return (
-    <div className="mt-4 space-y-3">
+    <div className="space-y-2">
       {split.state === "draft" ? (
-        <Button disabled={!!busy || !userId} onClick={() => void publish()}>
+        <Button
+          className="w-full"
+          disabled={!!busy || !userId}
+          onClick={() => void publish()}
+        >
+          {busy ? (
+            <IconLoader2 className="animate-spin" aria-hidden="true" />
+          ) : (
+            <IconFingerprint aria-hidden="true" />
+          )}
           {busy ??
-            `Publish ${split.participantIds.length} requests with passkey`}
+            `Send ${split.participantIds.length} ${split.participantIds.length === 1 ? "request" : "requests"}`}
         </Button>
       ) : (
-        <output className="block text-xs font-medium">
-          {split.state === "sent"
-            ? "Published · confirmed · delivered to friend DMs"
-            : split.state === "published"
-              ? "Published · confirmed · delivering requests…"
-              : "Publication pending · nothing delivered yet"}
+        <output className="block pt-3">
+          <Badge variant="secondary">
+            {split.state === "sent" ? (
+              <IconCheck aria-hidden="true" />
+            ) : (
+              <IconLoader2 className="animate-spin" aria-hidden="true" />
+            )}
+            {split.state === "sent"
+              ? "Requests delivered"
+              : split.state === "published"
+                ? "Confirmed · delivering…"
+                : "Publication pending"}
+          </Badge>
         </output>
       )}
       {(error || split.creation?.error) && (
@@ -163,13 +181,14 @@ export function PublishSplit({
           rel="noreferrer"
           href={`https://stellar.expert/explorer/testnet/tx/${split.creation.hash}`}
         >
-          Creation transaction ↗
+          View transaction ↗
         </a>
       )}
-      <p className="text-[11px] leading-5 text-muted-foreground">
-        Publication creates reimbursement requests. It does not transfer funds
-        or authorize charges. Naru sponsors the Testnet fee.
-      </p>
+      {split.state === "draft" && (
+        <p className="text-center text-[11px] text-muted-foreground">
+          Passkey approval · requests only, no money moved
+        </p>
+      )}
     </div>
   );
 }

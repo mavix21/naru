@@ -7,6 +7,7 @@ import { z } from "zod";
 import { readJson, requireRequest, serverKey } from "@/lib/auth/server";
 import { validateSignedAuthorization } from "@/lib/smart-account/server/policy";
 import { SmartAccountService } from "@/lib/smart-account/server/service";
+import { reconcileSharePayment } from "@/lib/splits/payments-server";
 import {
   validateCreationAuthorization,
   validateCreationEnvelope,
@@ -52,6 +53,26 @@ export async function POST(request: Request) {
     );
 
     if (body.action === "status" || split.state !== "draft") {
+      if (split.state === "sent") {
+        const { requests } = await fetchQuery(
+          api.splits.get,
+          { id },
+          { token },
+        );
+
+        for (const pending of requests) {
+          if (pending.state !== "submitting" || !pending.settlement) continue;
+
+          const terms = await fetchQuery(
+            api.splits.paymentTerms,
+            { key, id: pending._id },
+            { token },
+          );
+
+          await reconcileSharePayment(service, terms, token);
+        }
+      }
+
       await reconcileCreation(service, split, token);
 
       return Response.json({ ok: true });

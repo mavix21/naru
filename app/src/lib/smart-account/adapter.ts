@@ -15,8 +15,11 @@ import type { SwapIntent, SwapReview } from "@/lib/swaps/shared";
 import { parseAmount, TESTNET_ASSETS, type TransferAsset } from "@/lib/money";
 import {
   validateCreationAuthorization,
+  validateSharePaymentAuthorization,
   type CreationIntent,
   type CreationReview,
+  type SharePaymentReview,
+  type SharePaymentIntent,
 } from "@/lib/splits/policy";
 import { assertFreshSwap, validateSwapAuthorization } from "@/lib/swaps/policy";
 
@@ -26,6 +29,7 @@ import {
   paymentStateSchema,
   reservationSchema,
 } from "./payments";
+import { addressCredentials } from "./server/policy";
 import {
   configSchema,
   jobSchema,
@@ -649,6 +653,39 @@ export class NaruSmartAccount {
     });
 
     assertFreshSwap(expected);
+
+    return signed.toXDR("base64");
+  }
+
+  async signSharePayment(
+    review: SharePaymentReview,
+    expected: SharePaymentIntent,
+  ) {
+    if (
+      (await this.account()) !== review.intent.account ||
+      review.intent.account !== expected.account ||
+      review.intent.organizer !== expected.organizer ||
+      review.intent.splitId !== expected.splitId ||
+      review.intent.units !== expected.units ||
+      review.expiresAt <= Date.now()
+    )
+      throw new Error("Payment review changed. Review your share again.");
+    const entry = xdr.SorobanAuthorizationEntry.fromXDR(review.auth, "base64");
+    validateSharePaymentAuthorization(entry, review.intent);
+
+    if (
+      addressCredentials(entry).signatureExpirationLedger() !==
+      review.expiration
+    )
+      throw new Error("Payment review expiration changed.");
+
+    const signed = await this.kit.signAuthEntry(entry, {
+      expiration: review.expiration,
+      contextRuleIds: [0, 0],
+    });
+
+    if (review.expiresAt <= Date.now())
+      throw new Error("Payment review expired. Review again.");
 
     return signed.toXDR("base64");
   }

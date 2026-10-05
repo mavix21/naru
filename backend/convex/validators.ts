@@ -16,6 +16,7 @@ export const sponsorJobKind = v.union(
   v.literal("transfer"),
   v.literal("swap"),
   v.literal("split_create"),
+  v.literal("split_pay"),
   v.literal("split_keep_alive"),
 );
 

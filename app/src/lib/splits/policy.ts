@@ -1,4 +1,10 @@
-import { contractShares, displayAmount, NARU_SPLIT } from "@naru/backend/money";
+import {
+  contractShares,
+  displayAmount,
+  NARU_SPLIT,
+  parseAmount,
+  TESTNET_ASSETS,
+} from "@naru/backend/money";
 import {
   Address,
   nativeToScVal,
@@ -14,6 +20,7 @@ import {
   validateSignedAuthorization,
 } from "../smart-account/server/policy";
 import { TESTNET } from "../smart-account/shared";
+import { transferFunction } from "../smart-account/transfer";
 
 export type CreationIntent = {
   account: string;
@@ -162,7 +169,10 @@ export function maintenanceFunction(intent: CreationIntent) {
   );
 }
 
-function validateSplitRestoration(tx: Transaction, intent: CreationIntent) {
+function validateSplitRestoration(
+  tx: Transaction,
+  intent: Pick<CreationIntent, "account" | "splitId">,
+) {
   const ext = tx.toEnvelope().v1().tx().ext();
 
   if (ext.switch() !== 1) return;
@@ -260,4 +270,119 @@ export function parseCreatedSplit(state: CreatedSplit, intent: CreationIntent) {
     );
 
   return state;
+}
+
+export const sharePaymentIntentSchema = z.object({
+  account: z.string().regex(/^C[A-Z2-7]{55}$/),
+  organizer: z.string().regex(/^C[A-Z2-7]{55}$/),
+  splitId: z.string().regex(/^[0-9a-f]{64}$/),
+  units: z.string().regex(/^[1-9]\d{0,38}$/),
+});
+
+export type SharePaymentIntent = z.infer<typeof sharePaymentIntentSchema>;
+
+export const sharePaymentReviewSchema = creationReviewSchema.extend({
+  intent: sharePaymentIntentSchema,
+});
+
+export type SharePaymentReview = z.infer<typeof sharePaymentReviewSchema>;
+
+export function sharePaymentFunction(intent: SharePaymentIntent) {
+  sharePaymentIntentSchema.parse(intent);
+  parseAmount(displayAmount(intent.units), "USDC");
+
+  if (intent.account === intent.organizer)
+    throw new Error("The organizer’s share cannot be requested.");
+
+  return xdr.HostFunction.hostFunctionTypeInvokeContract(
+    new xdr.InvokeContractArgs({
+      contractAddress: Address.fromString(NARU_SPLIT.contract).toScAddress(),
+      functionName: "pay",
+      args: [
+        Address.fromString(intent.organizer).toScVal(),
+        xdr.ScVal.scvBytes(Buffer.from(intent.splitId, "hex")),
+        Address.fromString(intent.account).toScVal(),
+      ],
+    }),
+  );
+}
+
+export function validateSharePaymentAuthorization(
+  entry: xdr.SorobanAuthorizationEntry,
+  intent: SharePaymentIntent,
+) {
+  const root = entry.rootInvocation();
+  const children = root.subInvocations();
+
+  const transfer = transferFunction(
+    TESTNET_ASSETS.USDC,
+    intent.account,
+    intent.organizer,
+    BigInt(intent.units),
+  );
+
+  if (
+    entry.credentials().switch().name !== "sorobanCredentialsAddressV2" ||
+    Address.fromScAddress(addressCredentials(entry).address()).toString() !==
+      intent.account ||
+    root.function().switch().name !==
+      "sorobanAuthorizedFunctionTypeContractFn" ||
+    !root
+      .function()
+      .contractFn()
+      .toXDR()
+      .equals(sharePaymentFunction(intent).invokeContract().toXDR()) ||
+    children.length !== 1 ||
+    children[0].subInvocations().length !== 0 ||
+    children[0].function().switch().name !==
+      "sorobanAuthorizedFunctionTypeContractFn" ||
+    !children[0]
+      .function()
+      .contractFn()
+      .toXDR()
+      .equals(transfer.invokeContract().toXDR())
+  )
+    throw new Error(
+      "Payment authorization must settle only your exact USDC share to this organizer.",
+    );
+}
+
+export function validateSharePaymentEnvelope(
+  envelope: string,
+  hash: string | null,
+  sponsor: string,
+  intent: SharePaymentIntent,
+  reviewedAuth: string,
+  expires: number,
+) {
+  const tx = TransactionBuilder.fromXDR(envelope, TESTNET.networkPassphrase);
+
+  if (
+    !(tx instanceof Transaction) ||
+    tx.hash().toString("hex") !== hash ||
+    tx.source !== sponsor ||
+    tx.operations.length !== 1 ||
+    tx.memo.type !== "none" ||
+    !tx.timeBounds ||
+    tx.timeBounds.minTime !== "0" ||
+    Number(tx.timeBounds.maxTime) <= 0 ||
+    Number(tx.timeBounds.maxTime) > Math.floor(expires / 1000) ||
+    BigInt(tx.fee) > BigInt(5_000_000)
+  )
+    throw new Error("Payment envelope does not match this share’s review.");
+  const op = tx.operations[0];
+
+  if (
+    op.type !== "invokeHostFunction" ||
+    (op.source !== undefined && op.source !== sponsor) ||
+    !op.func.toXDR().equals(sharePaymentFunction(intent).toXDR()) ||
+    op.auth?.length !== 1
+  )
+    throw new Error("Only the reviewed NaruSplit payment is allowed.");
+  validateSharePaymentAuthorization(op.auth[0], intent);
+  validateSignedAuthorization(reviewedAuth, op.auth[0].toXDR("base64"));
+  validateSplitRestoration(tx, {
+    account: intent.organizer,
+    splitId: intent.splitId,
+  });
 }

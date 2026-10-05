@@ -6,6 +6,7 @@ import { api } from "@naru/backend/api";
 import { Asset } from "@stellar/stellar-sdk";
 import { tool } from "ai";
 import { fetchMutation, fetchQuery } from "convex/nextjs";
+import { ConvexError } from "convex/values";
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
 
@@ -21,6 +22,7 @@ import { SmartAccountService } from "@/lib/smart-account/server/service";
 import { TESTNET, TEST_FUNDING } from "@/lib/smart-account/shared";
 import { prepareSwapReview } from "@/lib/swaps/server";
 
+import type { DirectSwapRequest } from "./swap-request";
 import type { DirectTransferRequest } from "./transfer-request";
 
 export function moneyTools(
@@ -31,6 +33,7 @@ export function moneyTools(
   userText: string,
   requireFundingAccess: () => Promise<void>,
   directTransfer: DirectTransferRequest | null = null,
+  directSwap: DirectSwapRequest | null = null,
 ) {
   const requireSelected = (id: string) => {
     if (!selectedIds.has(id))
@@ -130,22 +133,26 @@ export function moneyTools(
     }),
     prepareSwap: tool({
       description:
-        "Prepare ONE live XLM → USDC swap quote on Stellar Testnet when the user requests a swap. Accept either an XLM amount to spend or a USDC amount to receive. For 'I want 1 USDC; swap as much XLM as needed', pass amount='1' and amountType='receive'; the server calculates the XLM cost from live quotes and protects the USDC target. Do not ask for an XLM amount when the receive amount is known. This cannot sign or execute. No other assets, reverse direction, or destination are supported. The user must review the quote card and explicitly authorize with a passkey. Never substitute tokens or estimate a quote yourself.",
+        "Prepare ONE live XLM → USDC swap quote on Stellar Testnet when the user requests a swap. Accept either an XLM amount to spend or a USDC amount to receive. For 'Swap XLM for 3 USDC', pass amount='3' and amountType='receive'. For 'I want 1 USDC; swap as much XLM as needed', pass amount='1' and amountType='receive'; the server calculates the XLM cost from live quotes and protects the USDC target. Do not ask for an XLM amount when the receive amount is known. This cannot sign or execute. No other assets, reverse direction, or destination are supported. The user must review the quote card and explicitly authorize with a passkey. Never substitute tokens or estimate a quote yourself.",
       inputSchema: z
         .object({
-          amount: z
-            .string()
-            .max(40)
-            .describe(
-              "The user-specified decimal amount, without an asset symbol.",
-            ),
-          amountType: z
-            .enum(["spend", "receive"])
-            .describe(
-              "spend = XLM to sell; receive = USDC to obtain with XLM.",
-            ),
-          assetIn: z.string().max(12),
-          assetOut: z.string().max(12),
+          amount: directSwap
+            ? z.literal(directSwap.amount)
+            : z
+                .string()
+                .max(40)
+                .describe(
+                  "The user-specified decimal amount, without an asset symbol.",
+                ),
+          amountType: directSwap
+            ? z.literal(directSwap.amountType)
+            : z
+                .enum(["spend", "receive"])
+                .describe(
+                  "spend = XLM to sell; receive = USDC to obtain with XLM.",
+                ),
+          assetIn: directSwap ? z.literal("XLM") : z.string().max(12),
+          assetOut: directSwap ? z.literal("USDC") : z.string().max(12),
         })
         .strict(),
       execute: async ({ amount, amountType, assetIn, assetOut }) => {
@@ -279,15 +286,25 @@ export function moneyTools(
     }),
     prepareSplit: tool({
       description:
-        "Prepare an editable equal split for review, never publish or send requests. Supports legacy XLM splits and USDC reimbursements for already-paid expenses. USDC requires includeSelf=true, mode=reimburse, and everyone's activated account. Participants must be structured mention IDs from this turn. XLM allows explicit self-exclusion and collecting before paying. Never change the user's asset or expense mode to make it fit.",
+        "Prepare an editable equal split for review, never publish or send requests. Supports legacy XLM splits and USDC reimbursements for already-paid expenses. USDC requires includeSelf=true, mode=reimburse, and everyone's activated account. If the user only asks to split USDC without saying they already paid, ask whether they already paid before calling this tool. Participants must be structured mention IDs from this turn. XLM allows explicit self-exclusion and collecting before paying. Never change the user's asset or expense mode to make it fit. A split card exists only when this tool returns splitId; otherwise explain the returned error or clarification.",
       inputSchema: z
         .object({
           title: z.string().min(1).max(100),
           total: z.string().max(40),
           asset: z.string().max(12),
           participantIds: z.array(z.string().max(100)).min(1).max(12),
-          includeSelf: z.boolean().default(true),
-          mode: z.enum(["collect", "reimburse"]).default("collect"),
+          includeSelf: z
+            .boolean()
+            .default(true)
+            .describe(
+              "Include the organizer in equal shares unless explicitly excluded. Required to be true for USDC.",
+            ),
+          mode: z
+            .enum(["collect", "reimburse"])
+            .default("collect")
+            .describe(
+              "collect is the XLM default for expenses not yet paid. reimburse requires the user to say they already paid and is the only supported USDC mode. Ask first if payment status is unspecified for USDC.",
+            ),
         })
         .strict(),
       execute: async ({ asset, participantIds, ...fields }) => {
@@ -297,27 +314,66 @@ export function moneyTools(
               "Splits support XLM or official Testnet USDC. Ask before changing the asset.",
           };
 
-        const id = await fetchMutation(
-          api.splits.prepare,
-          {
-            key: serverKey(),
-            messageId,
-            token: TESTNET_ASSETS[asset],
-            asset,
-            creationId:
-              asset === "USDC" ? randomBytes(32).toString("hex") : undefined,
-            participantIds: participantIds.map(requireSelected),
-            ...fields,
-          },
-          { token: await getToken() },
-        );
+        if (asset === "USDC" && !fields.includeSelf)
+          return {
+            error:
+              "USDC reimbursements must include your share. No split was prepared.",
+            instruction:
+              "Explain that USDC splits include the organizer. Ask whether the user wants to include their share; never change the asset or include them without asking.",
+          };
 
-        return {
-          splitId: id,
-          status: "draft",
-          instruction:
-            "The live split card is ready to edit and review. Requests have NOT been sent. USDC publication requires the organizer's passkey, creates requests only (no transfers or charges), and delivers into friend DMs only after chain confirmation. Use the card to confirm.",
-        };
+        if (asset === "USDC" && fields.mode !== "reimburse")
+          return {
+            error:
+              "USDC splits currently reimburse expenses you already paid. No split was prepared.",
+            instruction:
+              "If payment status is unspecified, ask whether the user already paid this expense. If they explicitly have not paid, explain that collecting USDC before paying is unavailable. To prepare a reimbursement in a follow-up, ask them to include the friends using the @ suggestions again. Never assume the expense was paid or switch assets.",
+          };
+
+        if (participantIds.some((id) => !selectedIds.has(id)))
+          return {
+            error:
+              "Select every friend using the @ suggestions in your message. No split was prepared.",
+            instruction:
+              "Ask the user to select each friend from the @ suggestions and resend the split request. Never ask for internal IDs or use a previous turn's mentions.",
+          };
+
+        try {
+          const id = await fetchMutation(
+            api.splits.prepare,
+            {
+              key: serverKey(),
+              messageId,
+              token: TESTNET_ASSETS[asset],
+              asset,
+              creationId:
+                asset === "USDC" ? randomBytes(32).toString("hex") : undefined,
+              participantIds: participantIds.map(requireSelected),
+              ...fields,
+            },
+            { token: await getToken() },
+          );
+
+          return {
+            splitId: id,
+            status: "draft",
+            instruction:
+              "The live split card is ready to edit and review. Requests have NOT been sent. USDC publication requires the organizer's passkey, creates requests only (no transfers or charges), and delivers into friend DMs only after chain confirmation. Use the card to confirm.",
+          };
+        } catch (error) {
+          const detail =
+            error instanceof ConvexError
+              ? z.string().max(400).safeParse(error.data)
+              : undefined;
+
+          return {
+            error: detail?.success
+              ? detail.data
+              : "The split review couldn’t be prepared. Please try again shortly.",
+            instruction:
+              "Briefly explain the preparation error. Do not claim a split card is ready or requests were sent. Do not retry with different participants, payment status, or assets.",
+          };
+        }
       },
     }),
     prepareRequestPayment: tool({
