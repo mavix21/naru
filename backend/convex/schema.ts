@@ -60,6 +60,48 @@ export default defineSchema({
     .index("by_pair", ["low", "high"])
     .index("by_low", ["low"])
     .index("by_high", ["high"]),
+  // Human DMs never share storage or agent threads with private Naru chat.
+  directConversations: defineTable({
+    kind: v.literal("direct"),
+    low: v.id("profiles"),
+    high: v.id("profiles"),
+    sequence: v.number(),
+    updatedAt: v.number(),
+    preview: v.optional(v.string()),
+    lastAuthorId: v.optional(v.id("profiles")),
+  }).index("by_pair", ["low", "high"]),
+  directMembers: defineTable({
+    conversationId: v.id("directConversations"),
+    participant: v.object({
+      kind: v.literal("human"),
+      profileId: v.id("profiles"),
+    }),
+    receivedCount: v.number(),
+    readCount: v.number(),
+    readSequence: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_participant", ["participant.profileId", "updatedAt"])
+    .index("by_conversation_participant", [
+      "conversationId",
+      "participant.profileId",
+    ]),
+  directMessages: defineTable({
+    conversationId: v.id("directConversations"),
+    author: v.object({
+      kind: v.literal("human"),
+      profileId: v.id("profiles"),
+    }),
+    recipientId: v.id("profiles"),
+    recipientOrdinal: v.number(),
+    clientId: v.string(),
+    kind: v.literal("text"),
+    text: v.string(),
+    sequence: v.number(),
+  })
+    .index("by_conversation", ["conversationId", "sequence"])
+    .index("by_retry", ["conversationId", "author.profileId", "clientId"])
+    .index("by_recipient", ["conversationId", "recipientId", "sequence"]),
   notifications: defineTable({
     clerkUserId: v.string(),
     eventKey: v.string(),
@@ -150,7 +192,9 @@ export default defineSchema({
     messageId: v.string(),
     sequence: v.number(),
     role: v.union(v.literal("user"), v.literal("assistant")),
-    agentMessageIds: v.array(v.string()),
+    // Compatibility window for the pre-agent production history migration.
+    agentMessageIds: v.optional(v.array(v.string())),
+    content: v.optional(v.string()),
     mentions: v.optional(v.array(mentionValidator)),
     event: v.optional(
       v.object({

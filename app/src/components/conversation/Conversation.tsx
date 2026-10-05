@@ -18,6 +18,7 @@ import {
 } from "react";
 import { z } from "zod";
 
+import { BackToChats } from "@/components/messaging/navigation";
 import { FocusedSocialCard } from "@/components/social/FocusedSocialCard";
 import {
   MentionComposer,
@@ -325,24 +326,6 @@ export function Conversation({
     }
   }, [snapshot.messages, draft, updateDraft]);
 
-  // VisualViewport follows the mobile keyboard, including Safari's non-resizing layout viewport.
-  useEffect(() => {
-    const viewport = window.visualViewport;
-
-    const resize = () =>
-      document.documentElement.style.setProperty(
-        "--naru-viewport",
-        `${viewport?.height ?? window.innerHeight}px`,
-      );
-
-    resize();
-    viewport?.addEventListener("resize", resize);
-
-    return () => {
-      viewport?.removeEventListener("resize", resize);
-      document.documentElement.style.removeProperty("--naru-viewport");
-    };
-  }, []);
   useLayoutEffect(() => {
     const input = composer.current;
 
@@ -430,28 +413,29 @@ export function Conversation({
   return (
     <section
       aria-label={`Conversation with ${name}`}
-      className="relative mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col"
+      className="relative mx-auto flex min-h-0 w-full flex-1 flex-col"
     >
-      {started && (
-        <div className="flex shrink-0 items-center gap-3 border-b border-border/50 pb-3 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-500">
-          <div
-            data-delight={delight}
-            className="naru-presence size-12 shrink-0"
-          >
-            {presence}
-          </div>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-medium">{name}</p>
-            <output className="mt-0.5 block text-[11px] text-muted-foreground">
-              {presenceText}
-            </output>
-          </div>
+      <div className="flex h-19 shrink-0 items-center gap-3 border-b border-border/70 px-4 md:px-7">
+        <BackToChats />
+        <div data-delight={delight} className="naru-presence size-10 shrink-0">
+          {presence}
         </div>
-      )}
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold">
+            Your Naru{" "}
+            <span className="ml-2 text-[10px] font-normal text-muted-foreground">
+              Private
+            </span>
+          </p>
+          <output className="mt-0.5 block text-[11px] text-muted-foreground">
+            {name} · {presenceText}
+          </output>
+        </div>
+      </div>
       <MessageScrollerProvider autoScroll defaultScrollPosition="last-anchor">
         <MessageScroller className="flex-1">
           <MessageScrollerViewport aria-label={`Messages with ${name}`}>
-            <div className="flex min-h-full flex-col px-1 py-5 md:px-5 md:py-9">
+            <div className="mx-auto flex min-h-full max-w-3xl flex-col px-4 py-5 md:px-7 md:py-7">
               <MessageScrollerContent
                 aria-busy={streaming || serverBusy}
                 className="flex-1"
@@ -711,7 +695,7 @@ export function Conversation({
           </MessageScrollerButton>
         </MessageScroller>
       </MessageScrollerProvider>
-      <div className="shrink-0 bg-background pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] md:pt-5 md:pb-6">
+      <div className="mx-auto w-full max-w-3xl shrink-0 bg-background px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] md:px-7 md:pt-4 md:pb-4">
         {(error || snapshot.conversation?.error || interrupted) && (
           <p
             role="alert"

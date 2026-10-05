@@ -19,6 +19,7 @@ import {
 } from "./_generated/server";
 import { requireServer, requireUser } from "./access";
 import { displayAmount } from "./money";
+import { migratePrivateHistory } from "./privateHistory";
 import { validateMentions } from "./socialShared";
 import { mentionValidator } from "./validators";
 
@@ -127,7 +128,7 @@ export async function appendOperationConfirmation(
 }
 
 async function readMessages(ctx: QueryCtx, rows: Doc<"messages">[]) {
-  const messageIds = rows.flatMap((row) => row.agentMessageIds);
+  const messageIds = rows.flatMap((row) => row.agentMessageIds ?? []);
 
   const docs = messageIds.length
     ? await ctx.runQuery(components.agent.messages.getMessagesByIds, {
@@ -139,24 +140,29 @@ async function readMessages(ctx: QueryCtx, rows: Doc<"messages">[]) {
     docs.flatMap((doc) => (doc ? [[doc._id, doc] as const] : [])),
   );
 
-  return rows.map((row) => {
-    const saved = row.agentMessageIds.map((id) => {
-      const doc = byId.get(id);
+  return Promise.all(
+    rows.map(async (row) => {
+      const saved = (row.agentMessageIds ?? []).map((id) => {
+        const doc = byId.get(id);
 
-      if (!doc)
-        throw new ConvexError("A saved conversation message is unavailable.");
+        if (!doc)
+          throw new ConvexError("A saved conversation message is unavailable.");
 
-      return doc;
-    });
+        return doc;
+      });
 
-    const message: UIMessage = {
-      id: row.messageId,
-      role: row.role,
-      parts: toUIMessages(saved).flatMap((item) => item.parts),
-    };
+      const message: UIMessage = row.content
+        ? (await validateUIMessages({ messages: [JSON.parse(row.content)] }))[0]
+        : {
+            id: row.messageId,
+            role: row.role,
+            parts: toUIMessages(saved).flatMap((item) => item.parts),
+          };
 
-    return { ...row, message };
-  });
+      // The previous web release still reads UIMessage JSON during the rolling deploy.
+      return { ...row, message, content: JSON.stringify(message) };
+    }),
+  );
 }
 
 export const event = query({
@@ -285,6 +291,11 @@ export const begin = mutation({
       throw new ConvexError("Please send a message of 1–4,000 characters.");
     let conversation = await find(ctx, user);
 
+    if (conversation && !conversation.agentThreadId) {
+      await migratePrivateHistory(ctx, conversation);
+      conversation = (await ctx.db.get(conversation._id))!;
+    }
+
     if (!conversation) {
       const id = await ctx.db.insert("conversations", {
         clerkUserId: user,
@@ -374,9 +385,14 @@ export const finish = mutation({
   handler: async (ctx, args) => {
     requireServer(args.key);
     const user = await requireUser(ctx);
-    const conversation = await find(ctx, user);
+    let conversation = await find(ctx, user);
 
     if (!conversation || conversation.activeTurn !== args.messageId) return;
+
+    if (!conversation.agentThreadId) {
+      await migratePrivateHistory(ctx, conversation);
+      conversation = (await ctx.db.get(conversation._id))!;
+    }
 
     if (args.content) {
       if (args.content.length > 200_000)

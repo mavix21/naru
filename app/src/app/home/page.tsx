@@ -1,4 +1,3 @@
-import { UserButton } from "@clerk/nextjs";
 import { api } from "@naru/backend/api";
 import { fetchQuery, preloadQuery } from "convex/nextjs";
 import { io } from "next/cache";
@@ -12,6 +11,9 @@ import { CompanionSettings } from "@/components/conversation/CompanionSettings";
 import { Conversation } from "@/components/conversation/Conversation";
 import { HomeMenu } from "@/components/conversation/HomeMenu";
 import { RecentOperations } from "@/components/conversation/RecentOperations";
+import { ChatWorkspace } from "@/components/messaging/ChatWorkspace";
+import { MobileTools } from "@/components/messaging/MobileTools";
+import { SessionMenu } from "@/components/messaging/SessionMenu";
 import { CompanionScene } from "@/components/onboarding/CompanionScene";
 import { ExperiencePage } from "@/components/onboarding/ExperiencePage";
 import { Frame } from "@/components/onboarding/Frame";
@@ -64,6 +66,7 @@ async function AuthenticatedHome() {
     social,
     notifications,
     incomingPending,
+    inbox,
   ] = await Promise.all([
     preloadQuery(api.conversations.current, {}, { token }),
     preloadQuery(api.payments.current, {}, { token }),
@@ -71,39 +74,73 @@ async function AuthenticatedHome() {
     preloadQuery(api.social.current, {}, { token }),
     preloadQuery(api.notifications.current, {}, { token }),
     preloadQuery(api.operations.pendingIncomingCount, {}, { token }),
+    preloadQuery(api.directMessages.inbox, {}, { token }),
   ]);
 
   const accent = accents.find((option) => option.id === companion.accent)!;
+  const accountPanel = <AccountPanel preloaded={payments} userId={userId} />;
+
+  const activityPanel = (
+    <RecentOperations preloaded={operations} userId={userId} />
+  );
+
+  const companionPanel = (
+    <>
+      <h2 className="text-sm font-medium">Make it yours.</h2>
+      <CompanionSettings
+        key={`${companion.name}-${companion.accent}`}
+        companion={{ name: companion.name, accent: companion.accent }}
+      />
+    </>
+  );
 
   return (
-    <Frame
-      className="relative h-[var(--naru-viewport,100dvh)] min-h-0 max-md:px-4 [&>footer]:hidden max-md:[&>header]:gap-2 max-md:[&>header>div]:gap-2"
+    <ChatWorkspace
+      key={userId}
+      userId={userId}
+      preloaded={inbox}
+      social={social}
+      naruAvatar={
+        <Image
+          src={accent.image}
+          alt=""
+          width={64}
+          height={64}
+          className={`size-full rounded-full object-contain ${accent.surface}`}
+        />
+      }
       controls={
-        <>
-          <nav
-            aria-label="Your money and companion"
-            className="flex min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-0 md:gap-5"
+        <header className="mx-auto flex h-16 max-w-400 items-center justify-between gap-3 px-5 md:px-7">
+          <Link
+            href="/home"
+            aria-label="Naru home"
+            className="text-[29px] leading-none font-semibold tracking-[-1.8px] outline-ring"
           >
-            <HomeMenu label="Account">
-              <AccountPanel preloaded={payments} userId={userId} />
-            </HomeMenu>
-            <HomeMenu label="Activity">
-              <RecentOperations preloaded={operations} userId={userId} />
-            </HomeMenu>
-            <HomeMenu label="Companion">
-              <h2 className="text-sm font-medium">Make it yours.</h2>
-              <CompanionSettings
-                key={`${companion.name}-${companion.accent}`}
-                companion={{ name: companion.name, accent: companion.accent }}
+            naru<span className="text-primary">.</span>
+          </Link>
+          <div className="flex min-w-0 items-center gap-3 md:gap-5">
+            <nav
+              aria-label="Your money and companion"
+              className="flex min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-0 md:gap-5"
+            >
+              <div className="hidden items-center gap-5 md:flex">
+                <HomeMenu label="Account">{accountPanel}</HomeMenu>
+                <HomeMenu label="Activity">{activityPanel}</HomeMenu>
+                <HomeMenu label="Companion">{companionPanel}</HomeMenu>
+              </div>
+              <MobileTools
+                account={accountPanel}
+                activity={activityPanel}
+                companion={companionPanel}
               />
-            </HomeMenu>
-            <SocialMenus
-              preloaded={notifications}
-              people={<People preloaded={social} />}
-            />
-          </nav>
-          <UserButton />
-        </>
+              <SocialMenus
+                preloaded={notifications}
+                people={<People preloaded={social} />}
+              />
+            </nav>
+            <SessionMenu />
+          </div>
+        </header>
       }
     >
       <Conversation
@@ -154,6 +191,6 @@ async function AuthenticatedHome() {
           </div>
         }
       />
-    </Frame>
+    </ChatWorkspace>
   );
 }
