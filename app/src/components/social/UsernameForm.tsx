@@ -50,10 +50,11 @@ export function UsernameForm({
       }}
     >
       <div>
-        <h2 className="text-lg tracking-tight">A name for your people.</h2>
-        <p className="mt-2 text-xs leading-6 text-muted-foreground">
-          Friends find you by your unique username. Your companion keeps its own
-          name.
+        <h2 className="text-base font-medium tracking-tight">
+          {initial ? "Edit profile" : "Choose your username"}
+        </h2>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Friends can find you by @username.
         </p>
       </div>
       <label className="block text-xs">
@@ -91,7 +92,7 @@ export function UsernameForm({
         </p>
       )}
       <Button type="submit" disabled={busy}>
-        {busy ? "Saving…" : "Save username"}
+        {busy ? "Saving…" : initial ? "Save changes" : "Save username"}
       </Button>
     </form>
   );

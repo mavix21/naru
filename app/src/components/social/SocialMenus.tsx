@@ -47,9 +47,9 @@ export function SocialMenus({
         <PopoverTrigger variant="homeMenu">People</PopoverTrigger>
         <PopoverContent
           align="end"
-          variant="homeMenu"
+          variant="people"
           aria-label="People"
-          className="max-h-[70dvh] w-[calc(100vw-2rem)] overflow-y-auto md:w-96"
+          className="max-h-[70dvh] w-[calc(100vw-2rem)] overflow-hidden md:w-96"
         >
           {people}
         </PopoverContent>

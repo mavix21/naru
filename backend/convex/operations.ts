@@ -5,6 +5,7 @@ import type { Id } from "./_generated/dataModel";
 import { mutation, query, type QueryCtx } from "./_generated/server";
 import { requireServer, requireUser } from "./access";
 import { appendOperationConfirmation } from "./conversations";
+import { deliverTransfer } from "./directMessages";
 import { assertTransferAmount, parseAmount } from "./money";
 import {
   deliver,
@@ -750,31 +751,6 @@ export const change = mutation({
         }
       }
 
-      if (
-        !row.swap &&
-        !row.requestId &&
-        row.recipientProfileId &&
-        action.state === "confirmed"
-      ) {
-        const sender = await profileFor(ctx, row.clerkUserId);
-
-        if (!sender) throw new ConvexError("Sender identity is unavailable.");
-        await deliver(
-          ctx,
-          row.recipientUserId,
-          `transfer:${row._id}:received`,
-          {
-            kind: "transfer_received",
-            actor: await publicPerson(ctx, sender._id),
-            transfer: {
-              amount: row.amount,
-              asset: row.asset,
-              hash: action.hash!,
-            },
-          },
-        );
-      }
-
       if (request) {
         if (request.state !== "submitting")
           throw new ConvexError("Request settlement is not pending.");
@@ -827,6 +803,14 @@ export const change = mutation({
             : row.receivedUnits,
         updatedAt: Date.now(),
       });
+
+      if (
+        !row.swap &&
+        !row.requestId &&
+        row.recipientProfileId &&
+        action.state === "confirmed"
+      )
+        await deliverTransfer(ctx, (await ctx.db.get(row._id))!);
 
       if (
         action.state === "confirmed" &&

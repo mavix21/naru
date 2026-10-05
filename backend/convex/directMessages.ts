@@ -182,6 +182,85 @@ export async function deliverSplitRequest(
   return id;
 }
 
+// Called only after reconciliation verifies the on-chain transfer. The receipt
+// and unread count commit with the operation, without touching private Naru chat.
+export async function deliverTransfer(
+  ctx: MutationCtx,
+  operation: Doc<"operations">,
+) {
+  if (
+    operation.state !== "confirmed" ||
+    !operation.hash ||
+    !operation.recipientProfileId ||
+    operation.swap ||
+    operation.requestId
+  )
+    throw new ConvexError("Transfer confirmation is not verified.");
+
+  const existing = await ctx.db
+    .query("directMessages")
+    .withIndex("by_operation", (q) => q.eq("operationId", operation._id))
+    .unique();
+
+  if (existing) return existing._id;
+
+  const senderProfile = await profileFor(ctx, operation.clerkUserId);
+  const recipientProfile = await ctx.db.get(operation.recipientProfileId);
+
+  if (
+    !senderProfile ||
+    recipientProfile?.clerkUserId !== operation.recipientUserId ||
+    senderProfile._id === recipientProfile._id
+  )
+    throw new ConvexError("Transfer identities are unavailable.");
+
+  const conversation = await ensurePair(
+    ctx,
+    senderProfile._id,
+    recipientProfile._id,
+  );
+
+  const [sender, recipient] = await Promise.all([
+    memberFor(ctx, conversation._id, senderProfile._id),
+    memberFor(ctx, conversation._id, recipientProfile._id),
+  ]);
+
+  if (!sender || !recipient) throw new ConvexError("Conversation unavailable.");
+  const sequence = conversation.sequence + 1;
+  const updatedAt = Date.now();
+
+  const id = await ctx.db.insert("directMessages", {
+    conversationId: conversation._id,
+    author: { kind: "naru_transfer", profileId: senderProfile._id },
+    recipientId: recipientProfile._id,
+    recipientOrdinal: recipient.receivedCount + 1,
+    clientId: `transfer:${operation._id}`,
+    kind: "transfer",
+    text: "",
+    operationId: operation._id,
+    transfer: {
+      amount: operation.amount,
+      asset: operation.asset,
+      hash: operation.hash,
+    },
+    sequence,
+  });
+
+  await ctx.db.patch(conversation._id, {
+    sequence,
+    updatedAt,
+    preview: `Payment · ${operation.amount} ${operation.asset} · confirmed`,
+    lastAuthorId: senderProfile._id,
+  });
+  await ctx.db.patch(sender._id, { updatedAt });
+  await ctx.db.patch(recipient._id, {
+    updatedAt,
+    receivedCount: recipient.receivedCount + 1,
+  });
+
+  return id;
+}
+
 export const requestCard = query({
   args: { id: v.id("paymentRequests") },
   handler: async (ctx, { id }) => {

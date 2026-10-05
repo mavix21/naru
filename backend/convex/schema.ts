@@ -89,20 +89,33 @@ export default defineSchema({
   directMessages: defineTable({
     conversationId: v.id("directConversations"),
     author: v.object({
-      kind: v.union(v.literal("human"), v.literal("naru_request")),
+      kind: v.union(
+        v.literal("human"),
+        v.literal("naru_request"),
+        v.literal("naru_transfer"),
+      ),
       profileId: v.id("profiles"),
     }),
     recipientId: v.id("profiles"),
     recipientOrdinal: v.number(),
     clientId: v.string(),
-    kind: v.union(v.literal("text"), v.literal("split_request")),
+    kind: v.union(
+      v.literal("text"),
+      v.literal("split_request"),
+      v.literal("transfer"),
+    ),
     text: v.string(),
     requestId: v.optional(v.id("paymentRequests")),
+    operationId: v.optional(v.id("operations")),
+    transfer: v.optional(
+      v.object({ amount: v.string(), asset: transferAsset, hash: v.string() }),
+    ),
     sequence: v.number(),
   })
     .index("by_conversation", ["conversationId", "sequence"])
     .index("by_retry", ["conversationId", "author.profileId", "clientId"])
     .index("by_request", ["requestId"])
+    .index("by_operation", ["operationId"])
     .index("by_recipient", ["conversationId", "recipientId", "sequence"]),
   notifications: defineTable({
     clerkUserId: v.string(),

@@ -441,6 +441,31 @@ export function DirectConversation({
                         {message.kind === "split_request" &&
                         message.requestId ? (
                           <SplitRequestMessage id={message.requestId} />
+                        ) : message.kind === "transfer" && message.transfer ? (
+                          <article
+                            aria-label={
+                              own ? "Sent payment" : "Received payment"
+                            }
+                            className="w-64 max-w-full space-y-3 py-1"
+                          >
+                            <p className="text-[10px] font-medium text-muted-foreground">
+                              {own ? "Sent" : "Received"} · confirmed · Testnet
+                            </p>
+                            <p className="text-2xl tracking-tight tabular-nums">
+                              {message.transfer.amount}{" "}
+                              <span className="text-sm">
+                                {message.transfer.asset}
+                              </span>
+                            </p>
+                            <a
+                              className="inline-block text-[11px] underline"
+                              href={`https://stellar.expert/explorer/testnet/tx/${message.transfer.hash}`}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              View confirmed receipt ↗
+                            </a>
+                          </article>
                         ) : (
                           <p
                             dir="auto"
