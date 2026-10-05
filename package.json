@@ -21,7 +21,7 @@
     "@oxlint/plugins": "1.85.0",
     "oxfmt": "^0.70.0",
     "oxlint": "1.85.0",
-    "turbo": "^2.11.3"
+    "turbo": "^2.11.5"
   },
   "packageManager": "pnpm@11.25.0"
 }

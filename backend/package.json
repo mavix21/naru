@@ -21,7 +21,7 @@
   },
   "dependencies": {
     "@convex-dev/agent": "0.7.3",
-    "ai": "7.0.116",
+    "ai": "7.0.118",
     "convex": "1.46.0"
   },
   "devDependencies": {
