@@ -33,6 +33,7 @@ import { useDirectDraft } from "@/hooks/useDirectDraft";
 import { cn } from "@/lib/utils";
 
 import { BackToChats, openChat } from "./navigation";
+import { SplitRequestMessage } from "./SplitRequestMessage";
 
 export function messageError(cause: unknown, fallback: string) {
   return cause instanceof ConvexError
@@ -402,6 +403,7 @@ export function DirectConversation({
 
                 const grouped =
                   !newDay &&
+                  before?.kind === message.kind &&
                   before?.author.profileId === message.author.profileId &&
                   message._creationTime - before._creationTime < 300_000;
 
@@ -436,12 +438,17 @@ export function DirectConversation({
                             : "rounded-bl-md border border-border/50 bg-background",
                         )}
                       >
-                        <p
-                          dir="auto"
-                          className="text-sm leading-[1.55] whitespace-pre-wrap [overflow-wrap:anywhere]"
-                        >
-                          {message.text}
-                        </p>
+                        {message.kind === "split_request" &&
+                        message.requestId ? (
+                          <SplitRequestMessage id={message.requestId} />
+                        ) : (
+                          <p
+                            dir="auto"
+                            className="text-sm leading-[1.55] whitespace-pre-wrap [overflow-wrap:anywhere]"
+                          >
+                            {message.text}
+                          </p>
+                        )}
                         <div className="mt-1 flex items-center justify-end gap-1 text-[10px] text-muted-foreground">
                           <time
                             dateTime={new Date(

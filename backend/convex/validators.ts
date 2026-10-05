@@ -15,6 +15,8 @@ export const sponsorJobKind = v.union(
   v.literal("fund"),
   v.literal("transfer"),
   v.literal("swap"),
+  v.literal("split_create"),
+  v.literal("split_keep_alive"),
 );
 
 export const swapTerms = v.object({

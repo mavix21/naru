@@ -1,57 +1,154 @@
 {
-  "validatedOnUtc": "2026-10-05",
+  "version": "0.2.0",
+  "verifiedAt": "2026-10-05T03:06:58.006Z",
   "network": "Test SDF Network ; September 2015",
   "rpcUrl": "https://soroban-testnet.stellar.org",
-  "observedProtocolVersion": 29,
-  "contractId": "CCZMEGP4UDCQYQORCF6225SOMLLSUTC3OCPLNECLBOGFADM3AZZQ5EMF",
-  "wasmSha256": "b5347660a7ff9d2bb991c086d37921ff79c5ec9adfcbfa9315b63970dfc1f5be",
-  "toolchain": {
-    "rust": "1.93.0",
-    "stellarCli": "23.1.4",
-    "sorobanSdk": "26.1.1"
-  },
-  "usdc": {
-    "contractId": "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA",
-    "issuer": "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
-    "decimals": 7
-  },
-  "accounts": {
-    "organizer": "GBWWCI4DY2MNOFJGB7ZY2CKNWQUZRFCM5PKJ7S3C3CO2Y7DMUVMU55WI",
-    "alice": "GCMIXPECVRJDRQM2O6UHNGBPZA654C7K5XZHIC24BXSS5Y6ODLJB6AWF",
-    "bob": "GDBJVGPWB7RKI7EUM7UKGYB4TYUWRRYGBMPTKTN56AUGIXHBFHAU4AKM"
-  },
-  "splitId": "0000000000000000000000000000000000000000000000000000000000000001",
-  "totalUnits": "3000001",
-  "shares": [
-    { "account": "organizer", "units": "1000001", "state": "Organizer" },
-    { "account": "alice", "units": "1000000", "state": "Paid", "ledger": 5028267 },
-    { "account": "bob", "units": "1000000", "state": "Cancelled", "ledger": 5028268 }
-  ],
-  "balancesInUsdcUnits": {
-    "beforeCreate": { "organizer": "0", "alice": "10000000", "contract": "0" },
-    "afterSmoke": { "organizer": "1000000", "alice": "9000000", "contract": "0" }
-  },
+  "contractId": "CCGF3HL4GCL37O2ZCCU6ZJRU5EEUGFRMZEV46BHKF5767ZYPY4BM6R76",
+  "wasmSha256": "ea4d32725fdfe63004095990dbe05ab13f84b24328891a04412f256a9b2fe0d8",
+  "wasmBytes": 12398,
+  "operator": "GBWWCI4DY2MNOFJGB7ZY2CKNWQUZRFCM5PKJ7S3C3CO2Y7DMUVMU55WI",
+  "splitTtlLedgers": 518400,
+  "splitRenewalThresholdLedgers": 120960,
+  "infrastructureManagedSeparately": true,
   "transactions": {
-    "upload": { "hash": "486f3151281844d49d5ab5768b3e7b988150d459a56134445f0ba3b7efd8887e", "ledger": 5028251, "status": "SUCCESS" },
-    "deploy": { "hash": "3ffcb954f59d7c289c320ea2ed0115f63a0acc2823f045707c834ae924941549", "ledger": 5028254, "status": "SUCCESS" },
-    "aliceTrustline": { "hash": "7113167aaf7213c2d459ab67979c401398db7ee65f65d6da1c5c308b82ff2cbf", "ledger": 5028251, "status": "SUCCESS" },
-    "organizerTrustline": { "hash": "6f231a3498a9c860b46749ee69ac09dad60c7e5540a50cc0ffe8db4f8068879c", "ledger": 5028258, "status": "SUCCESS" },
-    "fundUsdc": { "hash": "20d86913c76f4c16504c7be0e33f7c172a279febe7db77a08ab55d6894057e61", "ledger": 5028258, "status": "SUCCESS" },
-    "create": { "hash": "3676b1ecbe77e86525d7de6a40e2a73c6f3e2aa9ea2e0194d9d2f335c8da0961", "ledger": 5028263, "status": "SUCCESS" },
-    "pay": { "hash": "e072e165fd385adbbaf8d8cb09eaee66ab95286b6d9214fb879430d92e2b2c87", "ledger": 5028267, "status": "SUCCESS" },
-    "cancel": { "hash": "809670bfe4e78e25aa3f279f65ae7a6d42ed1e07a3215ad89fd80ca60eeb3107", "ledger": 5028268, "status": "SUCCESS" },
-    "identicalRetry": { "hash": "90bff4807bb65f49cf3de2d478ebe634370cb619ecce812ae8eb6bd522c156c1", "ledger": 5028275, "status": "SUCCESS", "returnValue": false }
+    "upload": {
+      "hash": "0af4f8772e7a453e740c30cce3bf13759a34a2d61a9fd15dbed573bc4466e694",
+      "estimatedFeeStroops": "56316120",
+      "status": "SUCCESS",
+      "ledger": 5029140,
+      "actualFeeStroops": "48968772",
+      "rentFeeStroops": "48890882"
+    },
+    "deploy": {
+      "hash": "365eee5d8e8bb9262afb43edda666e3de3add7b7aa6db6c188b1ea912b7f96dd",
+      "estimatedFeeStroops": "79397",
+      "status": "SUCCESS",
+      "ledger": 5029141,
+      "actualFeeStroops": "61579",
+      "rentFeeStroops": "54524"
+    },
+    "infrastructure:5150099": {
+      "hash": "d50dfdcc6989f401bfc797a333b1f9ac021c9fc2244feecf9b761ca3dd7ff336",
+      "estimatedFeeStroops": "184793343",
+      "status": "SUCCESS",
+      "ledger": 5029206,
+      "actualFeeStroops": "160682246",
+      "rentFeeStroops": "160679683"
+    }
   },
-  "rejectedSimulations": { "duplicatePayment": 9, "paymentAfterCancellation": 10 },
-  "paymentAuth": {
-    "credentials": "sorobanCredentialsSourceAccount",
-    "root": "NaruSplit.pay(organizer, splitId, alice)",
-    "nested": "USDC.transfer(alice, organizer, 1000000)"
+  "publication": {
+    "measuredAt": "2026-10-05T03:14:48.410Z",
+    "creationHash": "65bc68f184aea68be781a3bc1aad8e6137e140bd6d3c64d0bc3999a6c1e18a93",
+    "ledger": 5029249,
+    "splitId": "5544c8f902f7ab7a09d8533805fa6879747432556c9275534be7715e0e93dd86",
+    "organizer": "CAL3TEZWVHFEJGF3SR7RLE5NY77UVNG7XHMCFDDWFQHOZCCG66SK32ZO",
+    "totalUsdcUnits": "120000000",
+    "shares": [
+      {
+        "account": "CAL3TEZWVHFEJGF3SR7RLE5NY77UVNG7XHMCFDDWFQHOZCCG66SK32ZO",
+        "units": "40000000"
+      },
+      {
+        "account": "CARD6G3JIGIHOEKVXGA2OMIWLD7HBV2XCTBUF33RHPINSJGTFG4PWCID",
+        "units": "40000000"
+      },
+      {
+        "account": "CBTIANMXNGO2ERLLPUKEHEHJFQEHA3RM7HOTH4WAM2TDDOMNTUGFJCTP",
+        "units": "40000000"
+      }
+    ],
+    "estimatedFeeStroops": "2130183",
+    "actualFeeStroops": "1846935",
+    "rentFeeStroops": "1822963",
+    "sponsorCapStroops": "5000000",
+    "requestCount": 2,
+    "realDmDelivery": true,
+    "passkey": "virtual WebAuthn; real on-chain verification",
+    "alteredTermsRejected": true,
+    "rejectedPasskey": true,
+    "interruptedResponseRecovered": true,
+    "deduplicated": true,
+    "verificationResumed": true
   },
-  "validationScope": {
-    "nativeRustTests": 11,
-    "classicAccountCliSmoke": true,
-    "existingSmartAccountPasskeySmoke": false,
-    "archivalRestoration": "SDK-emulated automatic restoration; no live archival cycle exercised"
+  "benchmark": {
+    "measuredAt": "2026-10-05T03:02:23.327Z",
+    "authorization": "Existing Naru adapter; virtual WebAuthn credential; RPC enforce",
+    "syntheticParticipantAddresses": true,
+    "broadcast": false,
+    "sponsorCapStroops": "5000000",
+    "results": [
+      {
+        "participants": 2,
+        "ledger": 5029149,
+        "estimatedFeeStroops": "2012374",
+        "splitEntryBytes": 332
+      },
+      {
+        "participants": 3,
+        "ledger": 5029149,
+        "estimatedFeeStroops": "2131929",
+        "splitEntryBytes": 380
+      },
+      {
+        "participants": 4,
+        "ledger": 5029149,
+        "estimatedFeeStroops": "2251490",
+        "splitEntryBytes": 428
+      },
+      {
+        "participants": 5,
+        "ledger": 5029149,
+        "estimatedFeeStroops": "2371051",
+        "splitEntryBytes": 476
+      },
+      {
+        "participants": 6,
+        "ledger": 5029149,
+        "estimatedFeeStroops": "2490617",
+        "splitEntryBytes": 524
+      },
+      {
+        "participants": 7,
+        "ledger": 5029150,
+        "estimatedFeeStroops": "2610814",
+        "splitEntryBytes": 572
+      },
+      {
+        "participants": 8,
+        "ledger": 5029150,
+        "estimatedFeeStroops": "2730386",
+        "splitEntryBytes": 620
+      },
+      {
+        "participants": 9,
+        "ledger": 5029150,
+        "estimatedFeeStroops": "2849338",
+        "splitEntryBytes": 668
+      },
+      {
+        "participants": 10,
+        "ledger": 5029150,
+        "estimatedFeeStroops": "2968916",
+        "splitEntryBytes": 716
+      },
+      {
+        "participants": 11,
+        "ledger": 5029150,
+        "estimatedFeeStroops": "3088497",
+        "splitEntryBytes": 764
+      },
+      {
+        "participants": 12,
+        "ledger": 5029151,
+        "estimatedFeeStroops": "3208087",
+        "splitEntryBytes": 812
+      },
+      {
+        "participants": 13,
+        "ledger": 5029151,
+        "estimatedFeeStroops": "3327675",
+        "splitEntryBytes": 860
+      }
+    ]
   }
 }

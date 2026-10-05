@@ -14,9 +14,7 @@
     "prepare": "husky",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:swap:e2e": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/validate-swap.mjs",
-    "test:transfer:e2e": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/validate-transfer.mjs",
-    "test:messaging:e2e": "node --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/validate-messaging.mjs",
+    "splits:maintain": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --conditions=react-server --import tsx scripts/maintain-splits.ts",
     "swaps:check": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --conditions=react-server --import tsx scripts/check-swap-market.ts"
   },
   "dependencies": {
@@ -25,11 +23,9 @@
     "@clerk/nextjs": "7.9.7",
     "@naru/backend": "workspace:*",
     "@shadcn/react": "0.3.1",
-    "@stellar-scaffold/app-lib": "workspace:*",
     "@stellar/stellar-sdk": "16.3.0",
     "@tabler/icons-react": "^3.47.0",
     "@tanstack/react-query": "^5.90.17",
-    "@theahaco/ts-config": "^1.3.0",
     "ai": "7.0.116",
     "buffer": "6.0.3",
     "class-variance-authority": "^0.7.1",
@@ -47,15 +43,11 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@playwright/test": "^1.63.0",
     "@shadcn/lint": "^0.2.0",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^24.0.0",
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
-    "dotenv": "^17.4.2",
-    "glob": "^13.0.6",
-    "globals": "^17.6.0",
     "husky": "^9.1.7",
     "lint-staged": "^16.4.0",
     "oxfmt": "^0.70.0",
@@ -68,8 +60,5 @@
   "lint-staged": {
     "*.{js,jsx,ts,tsx,mjs,cjs}": "oxlint --react-plugin --nextjs-plugin --jsx-a11y-plugin --fix",
     "**/*": "oxfmt"
-  },
-  "engines": {
-    "stellar-scaffold": ">=0.0.24"
   }
 }

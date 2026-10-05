@@ -5,19 +5,15 @@
   "description": "Naru personal money assistant workspace",
   "workspaces": [
     "app",
-    "app-lib",
-    "app-lib/clients/*",
     "backend",
     "contracts"
   ],
   "scripts": {
-    "predev": "node scripts/dev-guard.mjs",
     "dev": "turbo run dev",
-    "prestart": "node scripts/dev-guard.mjs",
     "start": "turbo run dev",
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
-    "lint": "pnpm -r --if-present run lint && oxlint app-lib scripts --deny-warnings",
+    "lint": "pnpm -r --if-present run lint",
     "format": "oxfmt . --ignore-path=.oxfmtignore",
     "format:check": "oxfmt . --check --ignore-path=.oxfmtignore"
   },

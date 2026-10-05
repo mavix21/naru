@@ -9,6 +9,7 @@ type RequestBody = {
     | "fund"
     | "request"
     | "quote"
+    | "status"
     | "retry";
   requestId?: string;
   id?: string;

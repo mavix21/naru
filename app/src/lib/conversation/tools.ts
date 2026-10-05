@@ -6,6 +6,7 @@ import { api } from "@naru/backend/api";
 import { Asset } from "@stellar/stellar-sdk";
 import { tool } from "ai";
 import { fetchMutation, fetchQuery } from "convex/nextjs";
+import { randomBytes } from "node:crypto";
 import { z } from "zod";
 
 import type { PaymentState } from "@/lib/smart-account/payments";
@@ -278,7 +279,7 @@ export function moneyTools(
     }),
     prepareSplit: tool({
       description:
-        "Prepare an editable equal split for review, never send requests. Participants must be structured mention IDs from this turn. Default includeSelf=true for shared expenses; false only for explicit exclusion. collect means collecting before paying; reimburse only when the user explicitly says they already paid.",
+        "Prepare an editable equal split for review, never publish or send requests. Supports legacy XLM splits and USDC reimbursements for already-paid expenses. USDC requires includeSelf=true, mode=reimburse, and everyone's activated account. Participants must be structured mention IDs from this turn. XLM allows explicit self-exclusion and collecting before paying. Never change the user's asset or expense mode to make it fit.",
       inputSchema: z
         .object({
           title: z.string().min(1).max(100),
@@ -290,9 +291,10 @@ export function moneyTools(
         })
         .strict(),
       execute: async ({ asset, participantIds, ...fields }) => {
-        if (asset !== "XLM")
+        if (asset !== "XLM" && asset !== "USDC")
           return {
-            error: "Only test XLM is supported. Ask before changing the asset.",
+            error:
+              "Splits support XLM or official Testnet USDC. Ask before changing the asset.",
           };
 
         const id = await fetchMutation(
@@ -300,7 +302,10 @@ export function moneyTools(
           {
             key: serverKey(),
             messageId,
-            token: Asset.native().contractId(TESTNET.networkPassphrase),
+            token: TESTNET_ASSETS[asset],
+            asset,
+            creationId:
+              asset === "USDC" ? randomBytes(32).toString("hex") : undefined,
             participantIds: participantIds.map(requireSelected),
             ...fields,
           },
@@ -311,7 +316,7 @@ export function moneyTools(
           splitId: id,
           status: "draft",
           instruction:
-            "The live split card is ready to edit and review. Requests have NOT been sent. The user must press Send requests.",
+            "The live split card is ready to edit and review. Requests have NOT been sent. USDC publication requires the organizer's passkey, creates requests only (no transfers or charges), and delivers into friend DMs only after chain confirmation. Use the card to confirm.",
         };
       },
     }),

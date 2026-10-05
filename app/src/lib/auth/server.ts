@@ -3,6 +3,8 @@ import type { z } from "zod";
 
 import { auth } from "@clerk/nextjs/server";
 
+export { serverKey } from "./key";
+
 export async function sessionIdentity() {
   const session = await auth();
 
@@ -20,15 +22,6 @@ export async function sessionIdentity() {
   };
 
   return { userId: session.userId, token: await getToken(), getToken };
-}
-
-export function serverKey() {
-  const key = process.env.NARU_PAYMENTS_KEY;
-
-  if (!key || key.length < 32)
-    throw new Error("Set NARU_PAYMENTS_KEY on the app and Convex deployment.");
-
-  return key;
 }
 
 export async function requireRequest(request: Request, payments = false) {

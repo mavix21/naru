@@ -16,6 +16,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 
 import {
+  displayAmount,
   parseAmount,
   TESTNET_ASSETS,
   transferShortfall,
@@ -670,7 +671,10 @@ export class SmartAccountService {
       const transaction = await this.transaction(
         xdr.HostFunction.fromXDR(job.func, "base64"),
         auth,
-        job.kind === "swap" || job.kind === "transfer"
+        job.kind === "swap" ||
+          job.kind === "transfer" ||
+          job.kind === "split_create" ||
+          job.kind === "split_keep_alive"
           ? Math.floor(job.expires / 1000)
           : undefined,
       );
@@ -708,7 +712,9 @@ export class SmartAccountService {
 
       if (BigInt(prepared.fee) > MAX_FEE_STROOPS)
         throw new Error(
-          "Estimated fee exceeds the 0.5 test XLM sponsorship cap.",
+          job.kind === "split_create"
+            ? `Split creation needs ${displayAmount(prepared.fee)} test XLM in estimated fees, above Naru’s existing 0.5 test XLM sponsorship cap. No transaction was sent.`
+            : "Estimated fee exceeds the 0.5 test XLM sponsorship cap.",
         );
       validatePrepared?.(prepared);
       prepared.sign(this.config.sponsor);

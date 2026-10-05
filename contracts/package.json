@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "dev": "cd .. && stellar scaffold watch --build-clients"
+    "build": "CARGO_BUILD_RUSTFLAGS=\"--remap-path-prefix=${CARGO_HOME:-$HOME/.cargo}/registry/src=\" cargo rustc --locked -p naru-split --crate-type=cdylib --target=wasm32v1-none --release",
+    "test": "cargo test --locked -p naru-split"
   }
 }

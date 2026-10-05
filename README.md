@@ -38,22 +38,16 @@ cumplir objetivos con tu dinero.**
 
 ## ¿Cómo usa Stellar?
 
-**Stellar es la infraestructura que permite a Naru ejecutar movimientos de dinero
-autorizados por el usuario.** La aplicación integra cuentas inteligentes
-(smart accounts) en Soroban controladas mediante **passkeys** (huella, rostro o
-PIN del dispositivo), sin exigir conectar una wallet externa ni gestionar una
-frase semilla. La plataforma patrocina las comisiones de red para que el usuario
-pueda concentrarse en la acción que quiere realizar.
+**Stellar permite a Naru ejecutar movimientos de dinero autorizados por el
+usuario.** Las cuentas inteligentes en Soroban usan **passkeys** (huella, rostro
+o PIN), sin conectar una wallet externa ni gestionar una frase semilla. Naru
+patrocina las comisiones de red con un límite de **0,5 XLM por transacción**.
 
-Los agentes preparan y coordinan las operaciones; el usuario autoriza el
-movimiento y Stellar registra su ejecución. La confirmación de la transacción
-permite actualizar el estado del pago en las conversaciones de los participantes.
-
-Esta infraestructura sirve como base para ampliar Naru hacia cobros por
-servicios, tareas remuneradas y acuerdos de pago programables entre usuarios y
-sus agentes. **El prototipo actual valida la creación de cuentas, el fondeo y
-las transferencias en Stellar Testnet con activos de prueba; las capacidades
-adicionales forman parte de la visión del producto.**
+El prototipo usa **Stellar Testnet**: activación de cuentas, fondeo, transferencias
+XLM/USDC, swaps XLM → USDC y publicación de reembolsos con
+[NaruSplit](contracts/naru-split/README.md). Los agentes preparan las acciones;
+el usuario revisa y autoriza. Cobros por servicios, tareas remuneradas y otros
+acuerdos programables forman parte de la visión del producto.
 
 ## Prototipo: recorrido para el jurado
 
@@ -62,25 +56,39 @@ adicionales forman parte de la visión del producto.**
    recibir 5 XLM de prueba.
 3. **Conecta con otra persona:** en **People**, elige tu nombre de usuario,
    busca el suyo y envía una invitación. La otra persona debe aceptarla.
-4. **Conversa:** consulta tu saldo, pide «Envía 1 USDC a @ana» (también XLM) o prepara un gasto
-   compartido. Selecciona a la persona desde el menú de `@`.
-5. **Autoriza y sigue el resultado:** revisa la tarjeta y confirma el pago con
-   tu passkey. El estado se actualiza y puedes consultar la transacción en el
-   explorador de Stellar. Las solicitudes de gastos compartidos llegan al otro
-   participante para que pueda responder o pagar.
+4. **Conversa:** consulta tu saldo, pide «Cambia 1 XLM por USDC» o
+   «Envía 1 USDC a @ana». Selecciona a la persona desde el menú de `@`.
+5. **Autoriza:** revisa la tarjeta y confirma con tu passkey. El recibo enlaza
+   la transacción confirmada en Stellar.
+6. **Divide un gasto:** con dos amigos activados, pide «I paid 12 USDC; split it
+   between @ana, @josh, and me». Revisa las partes y pulsa **Publish requests with
+   passkey**. Cada amigo recibe una solicitud de 4 USDC en su DM. Publicar no
+   transfiere fondos; estas tarjetas USDC son de solo lectura por ahora.
 
-Para probar ambos lados, usa dos cuentas en perfiles de navegador distintos.
+Para probar ambos lados, usa cuentas en perfiles de navegador distintos.
 
-Los pagos usan Stellar Testnet y guardan su estado en Convex, tanto en local
-como en Vercel.
+### Evidencia en Testnet
+
+Validaciones del **4–5 de octubre de 2026**, mediante la app y passkeys virtuales
+de Chromium con autorización verificada en cadena:
+
+| Flujo         | Resultado                                           | Recibo                                                                                                                         |
+| ------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Swap          | 1 XLM → 0,1057259 USDC                              | [Ver transacción](https://stellar.expert/explorer/testnet/tx/173a183f11ed5d7ea05babcacf096c6738111aff717dd0a7249045ad11e361ff) |
+| Transferencia | 1 USDC entre amigos                                 | [Ver transacción](https://stellar.expert/explorer/testnet/tx/bbd304a78c00956c79a9706f2f3f2e00b0bbdcd7130c18216841b8f5c09f88ea) |
+| Reembolso     | 12 USDC entre tres personas; dos solicitudes por DM | [Ver transacción](https://stellar.expert/explorer/testnet/tx/65bc68f184aea68be781a3bc1aad8e6137e140bd6d3c64d0bc3999a6c1e18a93) |
+
+Los reintentos conservan el mismo hash y evitan duplicar operaciones o mensajes.
+Los detalles del contrato, costes y mantenimiento están en el
+[README de NaruSplit](contracts/naru-split/README.md).
 
 ## Tecnología
 
 - **Next.js, React y Tailwind CSS:** interfaz y servidor.
-- **Clerk y Convex:** acceso, amigos, conversaciones, solicitudes y registro
-  persistente de transacciones, reservas del patrocinador y límites de uso.
+- **Clerk y Convex:** acceso, amigos, conversaciones y estado persistente de pagos.
 - **AI SDK + Vercel AI Gateway:** interpretación de mensajes y propuestas de acción.
 - **Stellar Smart Account Kit y Soroban:** cuentas y pagos con passkeys.
+- **Soroswap:** swaps XLM → USDC con cotizaciones verificadas en Testnet.
 
 ## Ejecutar en local
 
@@ -117,16 +125,17 @@ Completa `app/.env.local` con:
   para cubrir comisiones y saldo de prueba.
 - `NARU_SMART_ACCOUNT_RECIPIENT`: dirección `G…` de una segunda cuenta Testnet
   financiada, requerida por la configuración.
+- `NARU_SOROSWAP_API_KEY`: clave de [Soroswap API](https://api.soroswap.finance/login)
+  para los swaps, con un perfil de partner sin comisión adicional.
 
-En el dashboard de **Convex → Settings → Environment Variables**, configura
-`NARU_PAYMENTS_KEY` con el mismo valor y `CLERK_JWT_ISSUER_DOMAIN` con la URL de
-Clerk `https://tu-instancia.clerk.accounts.dev`, sin barra final.
+En **Convex → Settings → Environment Variables**, configura `NARU_PAYMENTS_KEY`
+con el mismo valor y `CLERK_JWT_ISSUER_DOMAIN` con la URL de Clerk
+`https://tu-instancia.clerk.accounts.dev`, sin barra final.
 
-Puedes crear las dos cuentas Testnet y financiarlas con Friendbot desde
+Puedes crear las cuentas Testnet y financiarlas con Friendbot desde
 [Stellar Lab](https://lab.stellar.org). Conserva los valores locales de
 `NARU_SMART_ACCOUNT_ORIGIN` (`http://localhost:3000`) y
-`NARU_SMART_ACCOUNT_RP_ID` (`localhost`). El estado de los pagos se guarda en
-el mismo backend de Convex configurado en `NEXT_PUBLIC_CONVEX_URL`.
+`NARU_SMART_ACCOUNT_RP_ID` (`localhost`).
 
 Más opciones en [app/.env.example](app/.env.example) y
 [backend/.env.example](backend/.env.example).
@@ -136,158 +145,57 @@ Más opciones en [app/.env.example](app/.env.example) y
 ### 3. Inicia la aplicación
 
 ```bash
-# Terminal 1, desde la raíz del repositorio
-pnpm --dir backend dev
-
-# Terminal 2, desde la raíz del repositorio
-pnpm --dir app dev
+pnpm dev
 ```
 
-Abre **http://localhost:3000** con un navegador compatible con passkeys. Los pagos
-usan Testnet y el backend de Convex está en la nube.
+Inicia Next.js y Convex juntos. Abre **http://localhost:3000** con un navegador
+compatible con passkeys. Para ejecutar solo la interfaz: `pnpm --dir app dev`.
+Los contratos ya están desplegados en Testnet; el desarrollo de la app no
+requiere Docker ni Stellar Scaffold.
 
-Para desarrollar también los contratos del workspace, instala Rust, Stellar CLI
-y Stellar Scaffold CLI, inicia Docker y usa `pnpm dev` desde la raíz.
-Comprobaciones disponibles: `pnpm lint`, `pnpm typecheck` y `pnpm build`.
+### Swaps y transferencias USDC
 
-### Swaps XLM → USDC en Testnet
+`pnpm --dir app swaps:check` comprueba contratos, activos, reservas y una
+cotización real sin enviar transacciones. Naru usa el USDC oficial de Testnet
+con 7 decimales, una ruta directa en Soroswap y 0,5% de tolerancia. Si el API
+devuelve **No path found**, consulta el router verificado en cadena y lo indica
+en la tarjeta. Las cotizaciones caducadas requieren revisión y autorización nuevas.
 
-1. Obtén una clave en [Soroswap API](https://api.soroswap.finance/login) y añade
-   `NARU_SOROSWAP_API_KEY` a `app/.env.local` (o a las variables de Vercel).
-   Es una credencial **solo de servidor**. Configura el perfil de partner sin
-   comisión adicional: las cotizaciones con partner fee se rechazan.
-2. Publica el esquema y las funciones actualizadas con
-   `pnpm --dir backend exec convex dev --once`. Se reutilizan Clerk, Convex,
-   la cuenta inteligente, su passkey y el patrocinador ya configurados.
-3. Ejecuta `pnpm --dir app swaps:check`: verifica red, contratos, identidad de
-   los activos, reservas del pool y una cotización real para 1 XLM. Es una
-   comprobación de lectura; no envía transacciones. Si usas otro archivo de
-   entorno, exporta sus variables antes de ejecutar el comando.
-4. En el chat pide «Cambia 1 XLM por USDC». Revisa la estimación, el mínimo,
-   los costes y la caducidad. **Confirm with passkey** autoriza esa cotización.
-   Una cotización caducada requiere **Get new quote** y otra confirmación.
-5. Espera **Swapped · confirmed**, abre el recibo en Stellar Expert y comprueba
-   los saldos XLM/USDC en Account. Un hash pendiente no significa éxito.
+Si falta USDC para una transferencia, **Get USDC with a swap** prepara la
+solicitud de cambio. El usuario autoriza el swap y luego el envío por separado.
+Las identidades de los activos están en `backend/convex/money.ts`; las del
+mercado, en `app/src/lib/swaps/shared.ts`.
 
-Se usa USDC oficial de Testnet, con 7 decimales:
+### Comprobaciones
 
-- Emisor: `GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5`.
-- Contrato: `CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA`.
-- XLM: `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC`.
+```bash
+pnpm lint
+pnpm typecheck
+pnpm --dir app test
+pnpm --dir backend test
+pnpm --dir contracts test
+pnpm build
+```
 
-La identidad se deriva usando la passphrase Testnet y se verifica en cadena.
-No se usa el token distinto etiquetado como USDC en el quickstart de Soroswap.
-Las identidades oficiales se documentan en
-[Stellar Docs](https://developers.stellar.org/docs/build/agentic-payments/x402#testnet-usdc).
-Los contratos y hashes permitidos están en `app/src/lib/swaps/shared.ts`,
-contrastados con el [deployment de Soroswap](https://github.com/soroswap/core/blob/main/public/testnet.contracts.json).
-Un reset de Testnet o un cambio de código pausa los swaps hasta revisar esas
-identidades; no se aceptan contratos nuevos automáticamente.
-
-El servidor solicita `/quote?network=testnet` con `protocols: ["soroswap"]`,
-una ruta directa y 50 bps de tolerancia (0,5%). Si el API responde exactamente
-**No path found**, verifica nuevamente el pool y consulta
-`router_get_amounts_out` en el router Soroswap desplegado. Esta cotización
-proviene de la cadena en vivo; su ledger y origen quedan guardados, y la
-tarjeta la identifica como **Soroswap · live on-chain quote**. Errores de
-credenciales, respuestas inválidas y rutas no permitidas se rechazan.
-Construye la llamada al router
-verificado a partir de la cotización, sin confiar en XDR externo ni abrir una
-wallet externa. La comisión del pool (0,3%) está incluida; Naru patrocina la
-red con un máximo de 0,5 XLM. Solo se autoriza el router y una transferencia
-exacta de XLM al pool verificado. El destino de USDC es la propia cuenta.
-La expiración de dos minutos también limita la transacción y el contrato.
-
-Pruebas enfocadas: `pnpm --dir app test` y `pnpm --dir backend test`.
-Cubren importes enteros, activos/rutas incorrectos, árboles de autorización
-alterados, caducidad, cambio de cotización, aislamiento por usuario y
-reservas idempotentes. Las fixtures de prueba nunca generan cotizaciones
-en la aplicación. No se sustituye USDC ni se inventa una cotización: el
-fallback consulta el contrato Soroswap verificado. Una passkey rechazada no envía el swap;
-una transacción pendiente se reconcilia por su mismo hash, sin repetirla.
-
-**Validación end-to-end del 4 de octubre de 2026:** se confirmó un swap real
-de **1 XLM → 0,1057259 USDC**, mínimo **0,1051973 USDC**, en el ledger
-**5013745**. Se recorrió el chat, la tarjeta, autorización WebAuthn virtual en
-Chromium, envío patrocinado y recibo; los saldos pasaron de 5 a 4 XLM y de
-0 a 0,1057259 USDC en una cuenta de prueba aislada. Una consulta RPC
-independiente verificó `SUCCESS`.
-
-[Transacción confirmada: 173a183f11ed5d7ea05babcacf096c6738111aff717dd0a7249045ad11e361ff](https://stellar.expert/explorer/testnet/tx/173a183f11ed5d7ea05babcacf096c6738111aff717dd0a7249045ad11e361ff).
-
-El script reproducible confirmó una segunda ejecución en el ledger **5013837**:
-[9a2b45593c0f594e10dbc758ba20727d016a7f6ed10bb95d60a217b9ea9afb4c](https://stellar.expert/explorer/testnet/tx/9a2b45593c0f594e10dbc758ba20727d016a7f6ed10bb95d60a217b9ea9afb4c).
-Reenviar la misma autorización devolvió el mismo recibo sin cambiar los saldos;
-se verificó la prevención de ejecución duplicada en la ruta autenticada real.
-
-El API no encontraba la ruta porque su lista de pools Testnet estaba vacía;
-se utilizó el fallback on-chain explícito con los mismos activos oficiales.
-También se validaron el matcher de Clerk para `/api/swaps` y los dos contextos
-de autorización del swap (router + transferencia XLM), ambos con la regla
-de passkey existente.
-
-Para repetir la prueba real, inicia `pnpm --dir app dev`, instala Chromium con
-`pnpm --dir app exec playwright install chromium` y ejecuta
-`NARU_SWAP_E2E_DIR=/ruta/privada/fuera/del/repo pnpm --dir app test:swap:e2e`.
-El script usa Clerk Development y localhost, crea o reutiliza una cuenta de
-prueba, y ejecuta un swap de 1 XLM con una passkey virtual. Guarda capturas y
-el estado privado del navegador/passkey en ese directorio; no lo publiques.
-
-### Enviar USDC a amigos en Testnet
-
-Selecciona un amigo aceptado con `@` y pide **“Send 1 USDC to @ana”**. Ambos
-deben tener pagos activados. La tarjeta muestra destinatario, importe y activo;
-**Confirm with passkey** autoriza únicamente esa transferencia. Reutiliza el
-USDC oficial y su precisión de 7 decimales descritos arriba (`1 USDC = 10000000`
-unidades), cuentas inteligentes, comisiones patrocinadas y reconciliación.
-
-Si falta USDC, la tarjeta indica el déficit y **Get USDC with a swap** prepara
-el texto para solicitar el swap existente. El usuario revisa y autoriza el swap,
-y después vuelve a revisar y autorizar el envío. Ninguno se ejecuta automáticamente.
-Los saldos no disponibles bloquean la autorización hasta refrescarlos. Un envío
-pendiente conserva su hash; **Review again** solo reabre un fallo definitivo.
-El recibo y la notificación del destinatario se publican únicamente tras
-confirmación on-chain, junto con la actualización de los saldos de ambos usuarios.
-
-**Validación real del 4 de octubre de 2026:** dos usuarios de Clerk Development,
-amistad aceptada y cuentas activadas con passkeys virtuales en Chromium. Se
-envió **1 USDC**; el saldo del emisor pasó de 1 a 0 USDC y el del destinatario
-de 0 a 1 USDC. Ningún saldo XLM de los usuarios cambió. RPC confirmó `SUCCESS`
-en el ledger **5025813**, con una sola operación y una sola entrada de autorización:
-
-[bbd304a78c00956c79a9706f2f3f2e00b0bbdcd7130c18216841b8f5c09f88ea](https://stellar.expert/explorer/testnet/tx/bbd304a78c00956c79a9706f2f3f2e00b0bbdcd7130c18216841b8f5c09f88ea).
-
-También se verificaron rechazo de passkey sin envío, recarga del borrador,
-notificación y recibo del destinatario, y reenvío de la autorización sin un
-segundo débito. El déficit se cubrió previamente mediante un swap revisado y
-autorizado por separado:
-[f9c39c78b684f55a659fe1fe94238a49edac100e984bbabe933fbf01c637eb98](https://stellar.expert/explorer/testnet/tx/f9c39c78b684f55a659fe1fe94238a49edac100e984bbabe933fbf01c637eb98).
-
-Pruebas enfocadas: `pnpm --dir app test` y `pnpm --dir backend test`.
-Para repetir la validación con la app local y Chromium instalado:
-`NARU_TRANSFER_E2E_DIR=/ruta/privada/fuera/del/repo pnpm --dir app test:transfer:e2e`.
-El script guarda el resultado público en `result.json` y el navegador/passkeys
-privados en ese directorio. Usa un directorio nuevo para otra transferencia.
+Para los comandos de contratos y el build completo, instala el toolchain de
+`rust-toolchain.toml`. `pnpm --dir app build` construye solo la aplicación web.
 
 ## Desplegar en Vercel
 
 1. Configura las variables de `app/.env.example` en Vercel. Usa
    `NARU_SMART_ACCOUNT_ENABLED=true`, `NARU_SMART_ACCOUNT_ORIGIN=https://tu-dominio`
    y `NARU_SMART_ACCOUNT_RP_ID=tu-dominio`, el dominio estable donde usarás passkeys.
-2. En el deployment de Convex elegido, configura `CLERK_JWT_ISSUER_DOMAIN` y
-   el mismo `NARU_PAYMENTS_KEY` de Vercel. Cada deployment independiente de Convex
-   debe usar su propia cuenta patrocinadora para coordinar su secuencia.
-3. Despliega las funciones y el esquema de Convex antes de publicar la app.
-   Para hacerlo en cada build, configura `CONVEX_DEPLOY_KEY` en Vercel, selecciona
-   `app` como Root Directory y usa este Build Command:
+2. En Convex, configura `CLERK_JWT_ISSUER_DOMAIN` y el mismo `NARU_PAYMENTS_KEY`.
+   Cada deployment independiente debe usar su propia cuenta patrocinadora.
+3. Configura `CONVEX_DEPLOY_KEY` del backend correspondiente en Vercel,
+   selecciona `app` como Root Directory y usa este Build Command:
 
    ```bash
    pnpm --dir ../backend exec convex deploy --cmd 'pnpm --dir ../app build' --cmd-url-env-var-name NEXT_PUBLIC_CONVEX_URL
    ```
 
-   La clave debe corresponder al backend que usará la app. El comando inyecta su
-   URL en el build. Activa el acceso a los archivos fuera del Root Directory
-   para incluir los paquetes del workspace.
+   Activa el acceso a archivos fuera del Root Directory para incluir el backend.
+   Programa el [mantenimiento de NaruSplit](contracts/naru-split/README.md#fees-and-persistence).
 
 ---
 

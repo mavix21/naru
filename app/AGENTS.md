@@ -8,4 +8,4 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 <!-- END:nextjs-agent-rules -->
 
-The `src/app` routes and views are server components. Keep wallet/browser SDK imports behind client leaf boundaries; do not import the `app-lib` barrel from server components.
+The `src/app` routes and views are server components. Keep browser SDK imports behind client leaf boundaries.

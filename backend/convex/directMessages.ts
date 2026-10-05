@@ -1,8 +1,8 @@
 import { paginationOptsValidator } from "convex/server";
 import { ConvexError, v } from "convex/values";
 
-import type { Id } from "./_generated/dataModel";
-import type { QueryCtx } from "./_generated/server";
+import type { Doc, Id } from "./_generated/dataModel";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 
 import { mutation, query } from "./_generated/server";
 import { requireUser } from "./access";
@@ -58,13 +58,7 @@ export const start = mutation({
   args: { friendId: v.id("profiles") },
   handler: async (ctx, { friendId }) => {
     const me = await socialUser(ctx);
-    const [low, high] = [me._id, friendId].sort();
-
-    // The indexed empty-range read serializes simultaneous starts from either side.
-    const existing = await ctx.db
-      .query("directConversations")
-      .withIndex("by_pair", (q) => q.eq("low", low).eq("high", high))
-      .unique();
+    const existing = await pairConversation(ctx, me._id, friendId);
 
     if (existing) {
       await requireMember(ctx, existing._id);
@@ -74,28 +68,167 @@ export const start = mutation({
 
     await requireFriend(ctx, me._id, friendId);
     await throttle(ctx, `dm-start:${me._id}`, 20);
-    const updatedAt = Date.now();
 
-    const id = await ctx.db.insert("directConversations", {
-      kind: "direct",
-      low,
-      high,
-      sequence: 0,
+    return (await ensurePair(ctx, me._id, friendId))._id;
+  },
+});
+
+function pairConversation(ctx: QueryCtx, a: Id<"profiles">, b: Id<"profiles">) {
+  const [low, high] = [a, b].sort();
+
+  return ctx.db
+    .query("directConversations")
+    .withIndex("by_pair", (q) => q.eq("low", low).eq("high", high))
+    .unique();
+}
+
+async function ensurePair(
+  ctx: MutationCtx,
+  a: Id<"profiles">,
+  b: Id<"profiles">,
+) {
+  const existing = await pairConversation(ctx, a, b);
+
+  if (existing) return existing;
+  const [low, high] = [a, b].sort();
+  const updatedAt = Date.now();
+
+  // The empty-range read above serializes concurrent creation from both sides.
+  const id = await ctx.db.insert("directConversations", {
+    kind: "direct",
+    low,
+    high,
+    sequence: 0,
+    updatedAt,
+  });
+
+  for (const profileId of [low, high])
+    await ctx.db.insert("directMembers", {
+      conversationId: id,
+      participant: { kind: "human", profileId },
+      receivedCount: 0,
+      readCount: 0,
+      readSequence: 0,
       updatedAt,
     });
 
-    for (const profileId of [low, high]) {
-      await ctx.db.insert("directMembers", {
-        conversationId: id,
-        participant: { kind: "human", profileId },
-        receivedCount: 0,
-        readCount: 0,
-        readSequence: 0,
-        updatedAt,
-      });
-    }
+  return (await ctx.db.get(id))!;
+}
 
-    return id;
+// Internal delivery only: callers must have verified publication. No agent runs,
+// human-authored text, private history, or notification-bell entry is generated.
+export async function deliverSplitRequest(
+  ctx: MutationCtx,
+  request: Doc<"paymentRequests">,
+  split: Doc<"splits">,
+) {
+  if (
+    split.asset !== "USDC" ||
+    !split.creation?.hash ||
+    (split.state !== "published" && split.state !== "sent") ||
+    request.splitId !== split._id ||
+    request.organizerId !== split.organizer.userId ||
+    request.participantId === request.organizerId ||
+    !split.participantIds.includes(request.participantId)
+  )
+    throw new ConvexError("Request publication is not verified.");
+
+  const existing = await ctx.db
+    .query("directMessages")
+    .withIndex("by_request", (q) => q.eq("requestId", request._id))
+    .unique();
+
+  if (existing) return existing._id;
+
+  const conversation = await ensurePair(
+    ctx,
+    request.organizerId,
+    request.participantId,
+  );
+
+  const [sender, recipient] = await Promise.all([
+    memberFor(ctx, conversation._id, request.organizerId),
+    memberFor(ctx, conversation._id, request.participantId),
+  ]);
+
+  if (!sender || !recipient) throw new ConvexError("Conversation unavailable.");
+  const sequence = conversation.sequence + 1;
+  const updatedAt = Date.now();
+
+  const id = await ctx.db.insert("directMessages", {
+    conversationId: conversation._id,
+    author: { kind: "naru_request", profileId: request.organizerId },
+    recipientId: request.participantId,
+    recipientOrdinal: recipient.receivedCount + 1,
+    clientId: `split-request:${request._id}`,
+    kind: "split_request",
+    text: "",
+    requestId: request._id,
+    sequence,
+  });
+
+  await ctx.db.patch(conversation._id, {
+    sequence,
+    updatedAt,
+    preview: `Naru request · ${request.amount} USDC · ${split.title}`,
+    lastAuthorId: request.organizerId,
+  });
+  await ctx.db.patch(sender._id, { updatedAt });
+  await ctx.db.patch(recipient._id, {
+    updatedAt,
+    receivedCount: recipient.receivedCount + 1,
+  });
+
+  return id;
+}
+
+export const requestCard = query({
+  args: { id: v.id("paymentRequests") },
+  handler: async (ctx, { id }) => {
+    const request = await ctx.db.get(id);
+
+    if (!request?.directMessageId)
+      throw new ConvexError("Request unavailable.");
+    const message = await ctx.db.get(request.directMessageId);
+
+    if (
+      !message ||
+      message.requestId !== id ||
+      message.kind !== "split_request"
+    )
+      throw new ConvexError("Request unavailable.");
+
+    const { profile, conversation } = await requireMember(
+      ctx,
+      message.conversationId,
+    );
+
+    if (
+      (profile._id !== request.organizerId &&
+        profile._id !== request.participantId) ||
+      ![conversation.low, conversation.high].includes(request.organizerId) ||
+      ![conversation.low, conversation.high].includes(request.participantId)
+    )
+      throw new ConvexError("Request unavailable.");
+    const split = await ctx.db.get(request.splitId);
+
+    if (
+      !split ||
+      split.asset !== "USDC" ||
+      split.state !== "sent" ||
+      !split.creation?.hash
+    )
+      throw new ConvexError("Request unavailable.");
+
+    // Deliberately project only this request, never the split's other participants.
+    return {
+      description: split.title,
+      amount: request.amount,
+      asset: split.asset,
+      organizer: split.organizer,
+      state: request.state,
+      creationHash: split.creation.hash,
+    };
   },
 });
 
@@ -203,7 +336,11 @@ export const send = mutation({
 
     // An acknowledged retry is not a new send, even after friendship removal.
     if (existing) {
-      if (existing.text !== text)
+      if (
+        existing.kind !== "text" ||
+        existing.author.kind !== "human" ||
+        existing.text !== text
+      )
         throw new ConvexError("This retry belongs to a different message.");
 
       return existing._id;

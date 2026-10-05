@@ -3,6 +3,7 @@
 import type { Doc, Id } from "@naru/backend/data-model";
 
 import { api } from "@naru/backend/api";
+import { NARU_SPLIT } from "@naru/backend/money";
 import { useMutation, useQuery } from "convex/react";
 import Link from "next/link";
 import { useState } from "react";
@@ -11,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { displayAmount, equalShares } from "@/lib/money";
 
 import { Person } from "./Person";
+import { PublishSplit } from "./PublishSplit";
 
 export const requestLabels = {
   outstanding: "Outstanding",
@@ -51,9 +53,12 @@ function SplitDraft({ split }: { split: Doc<"splits"> }) {
   const [mode, setMode] = useState(split.mode);
   const [ids, setIds] = useState(split.participantIds);
   const [busy, setBusy] = useState(false);
+  const [authorizing, setAuthorizing] = useState(false);
   const [error, setError] = useState<string>();
 
   const dirty =
+    (split.asset === "USDC" &&
+      split.creation?.contract !== NARU_SPLIT.contract) ||
     title !== split.title ||
     total !== split.total ||
     includeSelf !== split.includeSelf ||
@@ -64,10 +69,13 @@ function SplitDraft({ split }: { split: Doc<"splits"> }) {
   let invalid: string | undefined;
 
   try {
-    calculation = equalShares(total, [
-      ...ids,
-      ...(includeSelf ? [split.organizer.userId] : []),
-    ]);
+    calculation =
+      split.asset === "USDC"
+        ? split.shares.map((s) => ({ userId: s.person.userId, units: s.units }))
+        : equalShares(total, [
+            ...ids,
+            ...(includeSelf ? [split.organizer.userId] : []),
+          ]);
   } catch (cause) {
     invalid = cause instanceof Error ? cause.message : "Check the total.";
   }
@@ -109,7 +117,14 @@ function SplitDraft({ split }: { split: Doc<"splits"> }) {
   }
 
   return (
-    <div className="space-y-5">
+    <fieldset disabled={busy || authorizing} className="space-y-5">
+      {split.asset === "USDC" &&
+        split.creation?.contract !== NARU_SPLIT.contract && (
+          <p className="text-xs text-muted-foreground">
+            The verified contract was updated. Save changes and review again
+            before authorizing.
+          </p>
+        )}
       <label className="block text-xs">
         What’s it for?
         <input
@@ -120,7 +135,7 @@ function SplitDraft({ split }: { split: Doc<"splits"> }) {
         />
       </label>
       <label className="block text-xs">
-        Total · XLM
+        Total · {split.asset}
         <input
           value={total}
           onChange={(e) => setTotal(e.target.value)}
@@ -187,6 +202,7 @@ function SplitDraft({ split }: { split: Doc<"splits"> }) {
           role="switch"
           aria-checked={includeSelf}
           checked={includeSelf}
+          disabled={split.asset === "USDC"}
           onChange={(e) => setIncludeSelf(e.target.checked)}
           className="size-5 accent-primary"
         />
@@ -198,6 +214,7 @@ function SplitDraft({ split }: { split: Doc<"splits"> }) {
             type="radio"
             name={`mode-${split._id}`}
             checked={mode === "collect"}
+            disabled={split.asset === "USDC"}
             onChange={() => setMode("collect")}
           />
           Collecting before paying
@@ -213,28 +230,39 @@ function SplitDraft({ split }: { split: Doc<"splits"> }) {
         </label>
       </fieldset>
       <div className="space-y-2 border-t pt-4">
-        {calculation.map((share) => (
-          <div
-            key={share.userId}
-            className="flex justify-between gap-3 text-xs"
-          >
-            <span>
-              {share.userId === split.organizer.userId
-                ? "You"
-                : (identities.find((p) => p.userId === share.userId)
-                    ?.displayName ?? "Friend")}
-            </span>
-            <span className="tabular-nums">
-              {displayAmount(share.units)} XLM
-            </span>
-          </div>
-        ))}
-        <p className="pt-2 text-xs font-medium">
-          Requesting {displayAmount(requested.toString())} XLM from {ids.length}{" "}
-          {ids.length === 1 ? "friend" : "friends"}.
-        </p>
+        {split.asset === "USDC" && dirty ? (
+          <p className="text-xs text-muted-foreground">
+            Save changes to resolve activated accounts and review exact on-chain
+            shares.
+          </p>
+        ) : (
+          calculation.map((share) => (
+            <div
+              key={share.userId}
+              className="flex justify-between gap-3 text-xs"
+            >
+              <span>
+                {share.userId === split.organizer.userId
+                  ? "You"
+                  : (identities.find((p) => p.userId === share.userId)
+                      ?.displayName ?? "Friend")}
+              </span>
+              <span className="tabular-nums">
+                {displayAmount(share.units)} {split.asset}
+              </span>
+            </div>
+          ))
+        )}
+        {!(split.asset === "USDC" && dirty) && (
+          <p className="pt-2 text-xs font-medium">
+            Requesting {displayAmount(requested.toString())} {split.asset} from{" "}
+            {ids.length} {ids.length === 1 ? "friend" : "friends"}.
+          </p>
+        )}
         <p className="text-[10px] leading-5 text-muted-foreground">
-          Equal shares. Any remaining smallest units go in stable user-ID order.
+          {split.asset === "USDC"
+            ? "Equal shares in seven-decimal USDC units. Remaining units go in canonical contract-address order."
+            : "Equal shares. Any remaining smallest units go in stable user-ID order."}
         </p>
       </div>
       {(error || invalid) && (
@@ -242,21 +270,25 @@ function SplitDraft({ split }: { split: Doc<"splits"> }) {
           {error || invalid}
         </p>
       )}
-      <Button
-        disabled={
-          busy ||
-          !!invalid ||
-          !ids.length ||
-          (!dirty && payment?.state !== "ready")
-        }
-        onClick={() => void save(!dirty)}
-      >
-        {busy
-          ? "Saving…"
-          : dirty
-            ? "Save review changes"
-            : `Send ${ids.length} ${ids.length === 1 ? "request" : "requests"}`}
-      </Button>
+      {split.asset === "USDC" && !dirty ? (
+        <PublishSplit split={split} onBusyChange={setAuthorizing} />
+      ) : (
+        <Button
+          disabled={
+            busy ||
+            !!invalid ||
+            !ids.length ||
+            (!dirty && payment?.state !== "ready")
+          }
+          onClick={() => void save(!dirty)}
+        >
+          {busy
+            ? "Saving…"
+            : dirty
+              ? "Save review changes"
+              : `Send ${ids.length} ${ids.length === 1 ? "request" : "requests"}`}
+        </Button>
+      )}
       {(payment && payment.state !== "ready") || payment === null ? (
         <ActivationReturn kind="split" id={split._id} />
       ) : null}
@@ -264,7 +296,7 @@ function SplitDraft({ split }: { split: Doc<"splits"> }) {
         Shared only after confirmation. This is a payment request, not an
         accepted debt.
       </p>
-    </div>
+    </fieldset>
   );
 }
 
@@ -290,7 +322,7 @@ export function SplitCard({ id }: { id: Id<"splits"> }) {
         <span>
           {split.state === "draft" ? "Review a split" : "Shared expense"}
         </span>
-        <span>Stellar testnet · XLM</span>
+        <span>Stellar testnet · {split.asset}</span>
       </div>
       {split.state === "draft" ? (
         <SplitDraft key={split.revision} split={split} />
@@ -299,7 +331,7 @@ export function SplitCard({ id }: { id: Id<"splits"> }) {
           <h3 className="text-lg tracking-tight">{split.title}</h3>
           <p className="mt-2 text-3xl tracking-tight tabular-nums">
             {split.total}{" "}
-            <span className="text-sm text-muted-foreground">XLM</span>
+            <span className="text-sm text-muted-foreground">{split.asset}</span>
           </p>
           <p className="mt-2 text-xs text-muted-foreground">
             {split.mode === "reimburse"
@@ -317,16 +349,19 @@ export function SplitCard({ id }: { id: Id<"splits"> }) {
                   <div className="flex items-start justify-between gap-3">
                     <Person person={share.person} />
                     <span className="shrink-0 text-xs tabular-nums">
-                      {displayAmount(share.units)} XLM
+                      {displayAmount(share.units)} {split.asset}
                     </span>
                   </div>
                   <div className="mt-2 flex items-center justify-between gap-2 pl-13 text-[11px] text-muted-foreground">
                     <span>
                       {request
                         ? requestLabels[request.state]
-                        : "Organizer’s share · not requested"}
+                        : share.person.userId === split.organizer.userId
+                          ? "Organizer’s share · not requested"
+                          : "Awaiting publication and delivery"}
                     </span>
-                    {isOrganizer &&
+                    {split.asset === "XLM" &&
+                      isOrganizer &&
                       request &&
                       (request.state === "outstanding" ||
                         request.state === "declined") && (
@@ -391,11 +426,12 @@ export function SplitCard({ id }: { id: Id<"splits"> }) {
                       .reduce((sum, r) => sum + BigInt(r.units), BigInt(0))
                       .toString(),
                   )}{" "}
-                  XLM
+                  {split.asset}
                 </span>
               </p>
             ))}
           </div>
+          {split.asset === "USDC" && <PublishSplit split={split} />}
           {error && (
             <p role="alert" className="mt-3 text-xs text-destructive">
               {error}

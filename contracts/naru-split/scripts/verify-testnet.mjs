@@ -1,175 +1,237 @@
-// Read-only deployment verification. Reuses the repository's installed SDK.
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 
-const require = createRequire(new URL("../../../app/package.json", import.meta.url));
+const require = createRequire(
+  new URL("../../../app/package.json", import.meta.url),
+);
 
-const { Address, Asset, Contract, Networks, TransactionBuilder, nativeToScVal, rpc, scValToNative } =
-  require("@stellar/stellar-sdk");
+const {
+  Address,
+  Contract,
+  Networks,
+  rpc,
+  TransactionBuilder,
+  scValToNative,
+  xdr,
+} = require("@stellar/stellar-sdk");
 
-const evidence = JSON.parse(await readFile(new URL("../deployments/testnet.json", import.meta.url), "utf8"));
+const deployment = JSON.parse(
+  await readFile(
+    new URL("../deployments/testnet.json", import.meta.url),
+    "utf8",
+  ),
+);
 
-const wasm = await readFile(new URL("../../../target/wasm32v1-none/release/naru_split.wasm", import.meta.url));
+const { publication, benchmark } = deployment;
 
-assert.equal(createHash("sha256").update(wasm).digest("hex"), evidence.wasmSha256, "local build differs from deployment");
+const wasm = await readFile(
+  new URL(
+    "../../../target/wasm32v1-none/release/naru_split.wasm",
+    import.meta.url,
+  ),
+);
 
-assert.equal(evidence.network, Networks.TESTNET);
+assert.equal(
+  createHash("sha256").update(wasm).digest("hex"),
+  deployment.wasmSha256,
+);
 
-assert.equal(evidence.rpcUrl, "https://soroban-testnet.stellar.org");
+assert.equal(benchmark.sponsorCapStroops, "5000000");
 
-assert.equal(new Asset("USDC", evidence.usdc.issuer).contractId(Networks.TESTNET), evidence.usdc.contractId);
+assert.deepEqual(
+  benchmark.results.map((r) => r.participants),
+  Array.from({ length: 12 }, (_, i) => i + 2),
+);
 
-async function rpcCall(method, params = {}) {
-  const response = await fetch(evidence.rpcUrl, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+assert.ok(
+  benchmark.results.every((r) => BigInt(r.estimatedFeeStroops) <= 5_000_000n),
+);
+
+const server = new rpc.Server(deployment.rpcUrl);
+
+assert.equal((await server.getNetwork()).passphrase, Networks.TESTNET);
+
+const instance = await server.getContractData(
+  deployment.contractId,
+  xdr.ScVal.scvLedgerKeyContractInstance(),
+);
+
+assert.equal(
+  instance.val
+    .contractData()
+    .val()
+    .instance()
+    .executable()
+    .wasmHash()
+    .toString("hex"),
+  deployment.wasmSha256,
+);
+
+const operatorReceipts = [];
+
+for (const [name, saved] of Object.entries(deployment.transactions)) {
+  const receipt = await server.getTransaction(saved.hash);
+  assert.equal(
+    receipt.status,
+    "SUCCESS",
+    `${name}: receipt unavailable or failed`,
+  );
+  assert.equal(receipt.ledger, saved.ledger);
+  assert.equal(
+    TransactionBuilder.fromXDR(receipt.envelopeXdr, Networks.TESTNET).source,
+    deployment.operator,
+  );
+  assert.equal(
+    receipt.resultXdr.feeCharged().toString(),
+    saved.actualFeeStroops,
+  );
+  operatorReceipts.push({
+    name,
+    hash: saved.hash,
+    actualFeeStroops: saved.actualFeeStroops,
   });
-
-  if (!response.ok) throw new Error(`RPC HTTP ${response.status}`);
-
-  const body = await response.json();
-
-  if (body.error) throw new Error(JSON.stringify(body.error));
-
-  return body.result;
 }
 
-const network = await rpcCall("getNetwork");
+const receipt = await server.getTransaction(publication.creationHash);
 
-assert.equal(network.passphrase, Networks.TESTNET);
+assert.equal(receipt.status, "SUCCESS");
 
-const server = new rpc.Server(evidence.rpcUrl);
+assert.equal(receipt.ledger, publication.ledger);
 
-const contract = new Contract(evidence.contractId);
+assert.equal(
+  receipt.resultXdr.feeCharged().toString(),
+  publication.actualFeeStroops,
+);
 
-const deployed = await server.getLedgerEntries(contract.getFootprint());
+const tx = TransactionBuilder.fromXDR(receipt.envelopeXdr, Networks.TESTNET);
 
-assert.equal(deployed.entries.length, 1, "contract instance unavailable (check archival or Testnet reset)");
+assert.notEqual(
+  tx.source,
+  deployment.operator,
+  "Application sponsor and deployment operator must be separate",
+);
 
-assert.equal(deployed.entries[0].val.contractData().val().instance().executable().wasmHash().toString("hex"), evidence.wasmSha256);
+assert.equal(tx.fee, publication.estimatedFeeStroops);
 
-const transactions = await Promise.all(Object.entries(evidence.transactions).map(async ([name, expected]) => {
-  const result = await rpcCall("getTransaction", { hash: expected.hash });
+assert.ok(BigInt(tx.fee) <= 5_000_000n);
 
-  assert.equal(result.status, "SUCCESS", `${name}: unavailable or unsuccessful; RPC history retention is finite`);
+assert.equal(tx.operations.length, 1);
 
-  assert.equal(result.ledger, expected.ledger, `${name}: ledger mismatch`);
+const op = tx.operations[0];
 
-  return { name, ...result };
-}));
+assert.equal(op.type, "invokeHostFunction");
 
-const payment = TransactionBuilder.fromXDR(transactions.find(t => t.name === "pay").envelopeXdr, Networks.TESTNET);
+assert.equal(op.auth.length, 1);
 
-assert.equal(payment.source, evidence.accounts.alice);
+assert.equal(op.auth[0].rootInvocation().subInvocations().length, 0);
 
-assert.equal(payment.operations.length, 1);
+assert.ok(
+  op.auth[0]
+    .rootInvocation()
+    .function()
+    .contractFn()
+    .toXDR()
+    .equals(op.func.invokeContract().toXDR()),
+);
 
-const operation = payment.operations[0];
+assert.equal(
+  Address.fromScAddress(op.func.invokeContract().contractAddress()).toString(),
+  deployment.contractId,
+);
 
-assert.equal(operation.type, "invokeHostFunction");
+assert.equal(op.func.invokeContract().functionName().toString(), "create");
 
-assert.equal(operation.auth.length, 1);
+const [organizer, id, total, participants] = op.func
+  .invokeContract()
+  .args()
+  .map(scValToNative);
 
-assert.equal(operation.auth[0].credentials().switch().name, evidence.paymentAuth.credentials);
+assert.equal(organizer, publication.organizer);
 
-// Decode the SDK's parsed XDR discriminants into the evidence's JSON format.
-function decoded(value) {
-  switch (value.switch().name) {
-    case "scvI128":
-      return scValToNative(value).toString();
-    case "scvBytes":
-      return value.bytes().toString("hex");
-    case "scvVec":
-      return value.vec().map(decoded);
-    case "scvMap":
-      return Object.fromEntries(value.map().map(entry => [decoded(entry.key()), decoded(entry.val())]));
-    default:
-      return scValToNative(value);
-  }
-}
+assert.equal(id.toString("hex"), publication.splitId);
 
-function invocation(value) {
-  const fn = value.function().contractFn();
+assert.equal(total.toString(), publication.totalUsdcUnits);
 
-  return {
-    contract: Address.fromScAddress(fn.contractAddress()).toString(),
-    method: fn.functionName().toString(),
-    args: fn.args().map(decoded),
-    children: value.subInvocations().map(invocation),
-  };
-}
+assert.deepEqual(
+  participants,
+  publication.shares.map((s) => s.account),
+);
 
-const authTree = invocation(operation.auth[0].rootInvocation());
+const source = await server.getAccount(tx.source);
 
-assert.deepEqual(authTree, {
-  contract: evidence.contractId,
-  method: "pay",
-  args: [evidence.accounts.organizer, evidence.splitId, evidence.accounts.alice],
-  children: [{
-    contract: evidence.usdc.contractId,
-    method: "transfer",
-    args: [evidence.accounts.alice, evidence.accounts.organizer, "1000000"],
-    children: [],
-  }],
-});
+const args = [Address.fromString(organizer).toScVal(), xdr.ScVal.scvBytes(id)];
 
-const source = await server.getAccount(evidence.accounts.organizer);
+const getTx = new TransactionBuilder(source, {
+  fee: "100",
+  networkPassphrase: Networks.TESTNET,
+})
+  .addOperation(new Contract(deployment.contractId).call("get", ...args))
+  .setTimeout(60)
+  .build();
 
-async function read(contractId, method, ...args) {
-  const tx = new TransactionBuilder(source, { fee: "100", networkPassphrase: Networks.TESTNET })
-    .addOperation(new Contract(contractId).call(method, ...args))
-    .setTimeout(60)
-    .build();
+const get = await server.simulateTransaction(getTx);
 
-  const simulation = await server.simulateTransaction(tx);
+assert.ok(rpc.Api.isSimulationSuccess(get));
 
-  if (!rpc.Api.isSimulationSuccess(simulation) || !simulation.result) {
-    throw new Error(`${method}: ${simulation.error ?? "simulation failed"}`);
-  }
+assert.equal(
+  get.stateChanges?.length ?? 0,
+  0,
+  "get must not write or renew storage",
+);
 
-  return decoded(simulation.result.retval);
-}
+const split = scValToNative(get.result.retval);
 
-const address = value => new Address(value).toScVal();
+assert.equal(split.recipient, organizer);
 
-const state = await read(evidence.contractId, "get", address(evidence.accounts.organizer), nativeToScVal(Buffer.from(evidence.splitId, "hex")));
+assert.equal(split.total.toString(), publication.totalUsdcUnits);
 
-assert.deepEqual(state, {
-  created_ledger: evidence.transactions.create.ledger,
-  recipient: evidence.accounts.organizer,
-  total: evidence.totalUnits,
-  shares: evidence.shares.map(share => ({
-    participant: evidence.accounts[share.account],
-    amount: share.units,
-    state: share.ledger ? [share.state, share.ledger] : [share.state],
+assert.equal(split.created_ledger, publication.ledger);
+
+assert.deepEqual(
+  split.shares.map((s) => ({
+    account: s.participant,
+    units: s.amount.toString(),
   })),
-});
+  publication.shares,
+);
 
-assert.equal(await read(evidence.contractId, "usdc"), evidence.usdc.contractId);
+assert.deepEqual(
+  split.shares.map((s) => s.state[0]),
+  publication.shares.map((s) =>
+    s.account === organizer ? "Organizer" : "Outstanding",
+  ),
+);
 
-assert.equal(await read(evidence.usdc.contractId, "decimals"), evidence.usdc.decimals);
+const key = xdr.LedgerKey.contractData(
+  new xdr.LedgerKeyContractData({
+    contract: Address.fromString(deployment.contractId).toScAddress(),
+    durability: xdr.ContractDataDurability.persistent(),
+    key: xdr.ScVal.scvVec([xdr.ScVal.scvSymbol("Split"), ...args]),
+  }),
+);
 
-const balances = {};
+const entry = await server.getLedgerEntries(key);
 
-for (const [name, expected] of Object.entries(evidence.balancesInUsdcUnits.afterSmoke)) {
-  const account = name === "contract" ? evidence.contractId : evidence.accounts[name];
+assert.equal(entry.entries.length, 1);
 
-  balances[name] = await read(evidence.usdc.contractId, "balance", address(account));
+assert.equal(
+  entry.entries[0].val.toXDR().length + 8,
+  benchmark.results.find((r) => r.participants === 3).splitEntryBytes,
+);
 
-  assert.equal(balances[name], expected, `${name}: balance has changed since smoke test`);
-}
-
-console.log(JSON.stringify({
+const report = {
   verifiedAt: new Date().toISOString(),
-  contractId: evidence.contractId,
-  wasmSha256: evidence.wasmSha256,
-  protocolVersion: network.protocolVersion,
-  transactions: transactions.map(({ name, status, ledger }) => ({ name, status, ledger })),
-  authTree,
-  state,
-  balances,
-  smartAccountPasskeyValidated: false,
-}, null, 2));
+  contractId: deployment.contractId,
+  creationHash: publication.creationHash,
+  sponsor: tx.source,
+  actualCreationFeeXlm: Number(publication.actualFeeStroops) / 1e7,
+  splitEntryBytes: entry.entries[0].val.toXDR().length + 8,
+  splitLiveUntilLedger: entry.entries[0].liveUntilLedgerSeq,
+  operatorReceipts,
+  benchmarkCounts: benchmark.results.length,
+  sponsorCapStroops: "5000000",
+};
+
+console.log(JSON.stringify(report, null, 2));

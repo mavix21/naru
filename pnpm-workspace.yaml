@@ -1,11 +1,8 @@
 packages:
   - "app"
-  - "app-lib"
-  - "app-lib/clients/*"
   - "backend"
   - "contracts"
 allowBuilds:
-  "@reown/appkit": false
   bufferutil: true
   esbuild: true
   secp256k1: true

@@ -13,6 +13,11 @@ import { z } from "zod";
 import type { SwapIntent, SwapReview } from "@/lib/swaps/shared";
 
 import { parseAmount, TESTNET_ASSETS, type TransferAsset } from "@/lib/money";
+import {
+  validateCreationAuthorization,
+  type CreationIntent,
+  type CreationReview,
+} from "@/lib/splits/policy";
 import { assertFreshSwap, validateSwapAuthorization } from "@/lib/swaps/policy";
 
 import {
@@ -598,6 +603,26 @@ export class NaruSmartAccount {
       expiration: review.expiration,
       contextRuleIds: [0],
     });
+
+    return signed.toXDR("base64");
+  }
+
+  async signCreation(review: CreationReview, expected: CreationIntent) {
+    if (
+      (await this.account()) !== expected.account ||
+      review.expiresAt <= Date.now()
+    )
+      throw new Error("Split review expired or account changed. Review again.");
+    const entry = xdr.SorobanAuthorizationEntry.fromXDR(review.auth, "base64");
+    validateCreationAuthorization(entry, expected);
+
+    const signed = await this.kit.signAuthEntry(entry, {
+      expiration: review.expiration,
+      contextRuleIds: [0],
+    });
+
+    if (review.expiresAt <= Date.now())
+      throw new Error("Split review expired. Review again.");
 
     return signed.toXDR("base64");
   }

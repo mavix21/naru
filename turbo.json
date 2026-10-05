@@ -6,8 +6,6 @@
       "cache": false,
       "persistent": true,
       "passThroughEnv": [
-        "STELLAR_*",
-        "XDG_CONFIG_HOME",
         "NEXT_PUBLIC_*",
         "CLERK_*",
         "CONVEX_*",
@@ -23,6 +21,10 @@
       "passThroughEnv": ["NARU_*", "AI_GATEWAY_API_KEY", "CONVEX_DEPLOY_KEY"]
     },
     "@naru/backend#build": {
+      "outputs": []
+    },
+    "@naru/contracts#build": {
+      "cache": false,
       "outputs": []
     },
     "typecheck": {

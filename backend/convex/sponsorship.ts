@@ -81,7 +81,16 @@ export const accountJobs = query({
     requireServer(args.key);
 
     const jobs = await Promise.all(
-      (["deploy", "fund", "transfer", "swap"] as const).map((kind) => {
+      (
+        [
+          "deploy",
+          "fund",
+          "transfer",
+          "swap",
+          "split_create",
+          "split_keep_alive",
+        ] as const
+      ).map((kind) => {
         const rows = ctx.db
           .query("sponsorJobs")
           .withIndex("by_account_kind", (q) =>
@@ -267,7 +276,10 @@ export const pending = mutation({
       job.state !== "preparing" ||
       job.preparingUntil === null ||
       job.preparingUntil <= Date.now() ||
-      ((job.kind === "swap" || job.kind === "transfer") &&
+      ((job.kind === "swap" ||
+        job.kind === "transfer" ||
+        job.kind === "split_create" ||
+        job.kind === "split_keep_alive") &&
         job.expires <= Date.now())
     )
       throw new ConvexError("Submission reservation was lost.");

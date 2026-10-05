@@ -30,6 +30,7 @@ export const config = {
     "/api/chat",
     "/api/transfers",
     "/api/swaps",
+    "/api/splits",
     "/sign-in/:path*",
     "/sign-up/:path*",
   ],

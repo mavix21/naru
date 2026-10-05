@@ -89,18 +89,20 @@ export default defineSchema({
   directMessages: defineTable({
     conversationId: v.id("directConversations"),
     author: v.object({
-      kind: v.literal("human"),
+      kind: v.union(v.literal("human"), v.literal("naru_request")),
       profileId: v.id("profiles"),
     }),
     recipientId: v.id("profiles"),
     recipientOrdinal: v.number(),
     clientId: v.string(),
-    kind: v.literal("text"),
+    kind: v.union(v.literal("text"), v.literal("split_request")),
     text: v.string(),
+    requestId: v.optional(v.id("paymentRequests")),
     sequence: v.number(),
   })
     .index("by_conversation", ["conversationId", "sequence"])
     .index("by_retry", ["conversationId", "author.profileId", "clientId"])
+    .index("by_request", ["requestId"])
     .index("by_recipient", ["conversationId", "recipientId", "sequence"]),
   notifications: defineTable({
     clerkUserId: v.string(),
@@ -123,19 +125,49 @@ export default defineSchema({
     title: v.string(),
     total: v.string(),
     units: v.string(),
-    asset: v.literal("XLM"),
+    asset: transferAsset,
     token: v.string(),
     participantIds: v.array(v.id("profiles")),
     includeSelf: v.boolean(),
     mode: v.union(v.literal("collect"), v.literal("reimburse")),
-    shares: v.array(v.object({ person: personValidator, units: v.string() })),
-    state: v.union(v.literal("draft"), v.literal("sent")),
+    shares: v.array(
+      v.object({
+        person: personValidator,
+        units: v.string(),
+        account: v.optional(v.string()),
+        requestState: v.optional(
+          v.union(
+            v.literal("outstanding"),
+            v.literal("paid"),
+            v.literal("cancelled"),
+          ),
+        ),
+      }),
+    ),
+    state: v.union(
+      v.literal("draft"),
+      v.literal("submitting"),
+      v.literal("published"),
+      v.literal("sent"),
+    ),
     revision: v.number(),
     organizerAccount: v.optional(v.string()),
+    maintenanceReviewId: v.optional(v.string()),
+    creation: v.optional(
+      v.object({
+        id: v.string(),
+        contract: v.string(),
+        reviewId: v.optional(v.string()),
+        hash: v.optional(v.string()),
+        ledger: v.optional(v.number()),
+        error: v.optional(v.string()),
+      }),
+    ),
     updatedAt: v.number(),
   })
     .index("by_turn", ["clerkUserId", "messageId"])
-    .index("by_owner", ["clerkUserId"]),
+    .index("by_owner", ["clerkUserId"])
+    .index("by_asset_state", ["asset", "state"]),
   paymentRequests: defineTable({
     splitId: v.id("splits"),
     organizerId: v.id("profiles"),
@@ -151,9 +183,11 @@ export default defineSchema({
     ),
     operationId: v.optional(v.id("operations")),
     hash: v.optional(v.string()),
+    directMessageId: v.optional(v.id("directMessages")),
     updatedAt: v.number(),
   })
     .index("by_split", ["splitId"])
+    .index("by_split_participant", ["splitId", "participantId"])
     .index("by_participant", ["participantId"]),
   replies: defineTable({
     clerkUserId: v.string(),

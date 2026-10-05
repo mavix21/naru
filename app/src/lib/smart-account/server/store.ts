@@ -4,7 +4,7 @@ import type { FunctionReturnType } from "convex/server";
 import { api } from "@naru/backend/api";
 import { fetchMutation, fetchQuery } from "convex/nextjs";
 
-import { serverKey } from "@/lib/auth/server";
+import { serverKey } from "@/lib/auth/key";
 
 export type RecordEntry = NonNullable<
   FunctionReturnType<typeof api.sponsorship.get>

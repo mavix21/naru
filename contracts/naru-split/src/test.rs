@@ -1,11 +1,13 @@
 extern crate std;
 
 use super::*;
+use soroban_sdk::xdr::ToXdr;
 use soroban_sdk::{
     Bytes, Event, IntoVal, Symbol,
     testutils::{
         Address as _, AuthorizedFunction, AuthorizedInvocation, EnvTestConfig, Events, Ledger,
-        MockAuth, MockAuthInvoke, storage::Persistent,
+        MockAuth, MockAuthInvoke,
+        storage::{Instance, Persistent},
     },
     token::StellarAssetClient,
     xdr,
@@ -759,4 +761,101 @@ fn ttl_maintenance_and_archival_preserve_settlement_and_creation_guard() {
         );
     }
     assert_eq!(f.balance(&f.organizer), 10);
+}
+
+#[test]
+fn compact_storage_has_bounded_size_and_terminal_updates_do_not_grow_it() {
+    for count in 2..=MAX_PARTICIPANTS {
+        let f = Fixture::new();
+        let mut participants = soroban_sdk::vec![&f.env, f.organizer.clone()];
+        for _ in 1..count {
+            participants.push_back(Address::generate(&f.env));
+        }
+        f.auth(
+            &f.organizer,
+            "create",
+            (&f.organizer, &f.id, i128::MAX, &participants).into_val(&f.env),
+        );
+        f.client()
+            .create(&f.organizer, &f.id, &i128::MAX, &participants);
+        let key = DataKey::Split(f.organizer.clone(), f.id.clone());
+        let stored = || {
+            f.env.as_contract(&f.contract, || {
+                f.env
+                    .storage()
+                    .persistent()
+                    .get::<_, StoredSplit>(&key)
+                    .unwrap()
+            })
+        };
+        let initial_size = stored().to_xdr(&f.env).len();
+        let public_size = f.get().to_xdr(&f.env).len();
+        assert!(
+            initial_size < public_size / 2,
+            "{count}: {initial_size} vs {public_size}"
+        );
+        // Exercise every bit position, including the thirteenth participant,
+        // with mixed terminal states and distinct ledger numbers.
+        for (index, participant) in participants.iter().enumerate().skip(1) {
+            f.env.ledger().set_sequence_number(101 + index as u32);
+            if index % 2 == 0 {
+                f.cancel(&participant);
+                assert_eq!(
+                    f.share(&participant).state,
+                    ShareState::Cancelled(101 + index as u32)
+                );
+            } else {
+                let amount = f.share(&participant).amount;
+                f.mint(&participant, amount);
+                f.pay(&participant);
+                assert_eq!(
+                    f.share(&participant).state,
+                    ShareState::Paid(101 + index as u32)
+                );
+            }
+            assert_eq!(stored().to_xdr(&f.env).len(), initial_size);
+        }
+        assert_eq!(f.share(&f.organizer).state, ShareState::Organizer);
+        std::println!(
+            "participants={count}, stored_value_bytes={initial_size}, former_value_bytes={public_size}"
+        );
+    }
+}
+
+#[test]
+fn split_rent_is_separate_from_instance_rent_and_reads_do_not_renew() {
+    let f = Fixture::new();
+    let instance_ttl = f
+        .env
+        .as_contract(&f.contract, || f.env.storage().instance().get_ttl());
+    f.create(30);
+    assert_eq!(
+        f.env
+            .as_contract(&f.contract, || f.env.storage().instance().get_ttl()),
+        instance_ttl
+    );
+    let key = DataKey::Split(f.organizer.clone(), f.id.clone());
+    f.env
+        .ledger()
+        .set_sequence_number(100 + TTL_TARGET - TTL_THRESHOLD + 1);
+    let before = f
+        .env
+        .as_contract(&f.contract, || f.env.storage().persistent().get_ttl(&key));
+    f.get();
+    assert_eq!(
+        f.env
+            .as_contract(&f.contract, || f.env.storage().persistent().get_ttl(&key)),
+        before
+    );
+    f.client().keep_alive(&f.organizer, &f.id);
+    assert!(
+        f.env
+            .as_contract(&f.contract, || f.env.storage().persistent().get_ttl(&key))
+            > before
+    );
+    assert_eq!(
+        f.env
+            .as_contract(&f.contract, || f.env.storage().persistent().get_ttl(&key)),
+        TTL_TARGET
+    );
 }

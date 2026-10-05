@@ -9,8 +9,8 @@ use soroban_sdk::{
 pub const USDC: &str = "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA";
 /// Organizer plus at most twelve other participants.
 pub const MAX_PARTICIPANTS: u32 = 13;
-const TTL_THRESHOLD: u32 = 30 * 17_280;
-const TTL_TARGET: u32 = 120 * 17_280;
+const TTL_THRESHOLD: u32 = 7 * 17_280;
+const TTL_TARGET: u32 = 30 * 17_280;
 
 #[contracterror]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -54,6 +54,55 @@ pub struct Split {
     pub total: i128,
     pub shares: Vec<Share>,
     pub created_ledger: u32,
+}
+
+// Private, fixed-shape persistent representation. The recipient lives in the
+// key; equal amounts are derived from total and canonical participant order.
+// Two bits per participant encode outstanding/paid/cancelled. Ledger slots are
+// allocated at creation so settlement cannot grow the entry's rent footprint.
+// A tuple avoids storing repeated field names on every participant.
+#[contracttype]
+#[derive(Clone)]
+struct StoredSplit(i128, Vec<Address>, u32, Vec<u32>, u32);
+
+impl StoredSplit {
+    fn amount(&self, index: u32) -> i128 {
+        let count = i128::from(self.1.len());
+        self.0 / count + i128::from(i128::from(index) < self.0 % count)
+    }
+
+    fn state(&self, index: u32, organizer: &Address) -> ShareState {
+        if self.1.get_unchecked(index) == *organizer {
+            return ShareState::Organizer;
+        }
+        match (self.2 >> (2 * index)) & 3 {
+            1 => ShareState::Paid(self.3.get_unchecked(index)),
+            2 => ShareState::Cancelled(self.3.get_unchecked(index)),
+            _ => ShareState::Outstanding,
+        }
+    }
+
+    fn finish(&mut self, index: u32, state: u32, ledger: u32) {
+        self.2 |= state << (2 * index);
+        self.3.set(index, ledger);
+    }
+
+    fn public(&self, env: &Env, organizer: &Address) -> Split {
+        let mut shares = Vec::new(env);
+        for (index, participant) in self.1.iter().enumerate() {
+            shares.push_back(Share {
+                participant,
+                amount: self.amount(index as u32),
+                state: self.state(index as u32, organizer),
+            });
+        }
+        Split {
+            recipient: organizer.clone(),
+            total: self.0,
+            shares,
+            created_ledger: self.4,
+        }
+    }
 }
 
 // Terms, terminal states, and the creation idempotency guard are ONE durable
@@ -104,32 +153,34 @@ fn token(env: &Env) -> Address {
     Address::from_str(env, USDC)
 }
 
-fn extend(env: &Env, key: Option<&DataKey>) {
+fn extend(env: &Env, key: &DataKey) {
     let target = TTL_TARGET.min(env.storage().max_ttl());
     let threshold = TTL_THRESHOLD.min(target);
-    // Extends both the instance and its WASM code TTL.
-    env.storage().instance().extend_ttl(threshold, target);
-    if let Some(key) = key {
-        env.storage()
-            .persistent()
-            .extend_ttl(key, threshold, target);
-    }
+    // Shared instance/WASM rent is an operator maintenance concern, never an
+    // unpredictable bill attached to an organizer's creation or a payment.
+    env.storage()
+        .persistent()
+        .extend_ttl(key, threshold, target);
 }
 
-fn load(env: &Env, key: &DataKey) -> Result<Split, Error> {
+fn load(env: &Env, key: &DataKey) -> Result<StoredSplit, Error> {
     env.storage().persistent().get(key).ok_or(Error::NotFound)
 }
 
-fn save(env: &Env, key: &DataKey, split: &Split) {
+fn save(env: &Env, key: &DataKey, split: &StoredSplit) {
     env.storage().persistent().set(key, split);
-    extend(env, Some(key));
+    extend(env, key);
 }
 
-fn outstanding(split: &Split, participant: &Address) -> Result<(u32, Share), Error> {
-    for (index, share) in split.shares.iter().enumerate() {
-        if share.participant == *participant {
-            return match share.state {
-                ShareState::Outstanding => Ok((index as u32, share)),
+fn outstanding(
+    split: &StoredSplit,
+    organizer: &Address,
+    participant: &Address,
+) -> Result<u32, Error> {
+    for (index, address) in split.1.iter().enumerate() {
+        if address == *participant {
+            return match split.state(index as u32, organizer) {
+                ShareState::Outstanding => Ok(index as u32),
                 ShareState::Organizer => Err(Error::OrganizerShare),
                 ShareState::Paid(_) => Err(Error::AlreadyPaid),
                 ShareState::Cancelled(_) => Err(Error::Cancelled),
@@ -178,49 +229,25 @@ impl NaruSplit {
             return Err(Error::MissingOrganizer);
         }
 
-        let base = total / i128::from(count);
-        let remainder = total % i128::from(count);
-        let mut shares = Vec::new(&env);
-        for (index, participant) in ordered.iter().enumerate() {
-            shares.push_back(Share {
-                amount: base + i128::from((index as i128) < remainder),
-                state: if participant == organizer {
-                    ShareState::Organizer
-                } else {
-                    ShareState::Outstanding
-                },
-                participant,
-            });
-        }
-
         let key = DataKey::Split(organizer.clone(), split_id.clone());
-        if let Some(existing) = env.storage().persistent().get::<_, Split>(&key) {
-            if existing.total != total
-                || existing.recipient != organizer
-                || existing.shares.len() != shares.len()
-                || existing
-                    .shares
-                    .iter()
-                    .zip(shares.iter())
-                    .any(|(a, b)| a.participant != b.participant || a.amount != b.amount)
-            {
+        if let Some(existing) = env.storage().persistent().get::<_, StoredSplit>(&key) {
+            if existing.0 != total || existing.1 != ordered {
                 return Err(Error::ConflictingSplit);
             }
-            extend(&env, Some(&key));
+            extend(&env, &key);
             return Ok(false);
         }
 
-        let split = Split {
-            recipient: organizer.clone(),
-            total,
-            shares,
-            created_ledger: env.ledger().sequence(),
-        };
+        let mut ledgers = Vec::new(&env);
+        for _ in 0..count {
+            ledgers.push_back(0);
+        }
+        let split = StoredSplit(total, ordered, 0, ledgers, env.ledger().sequence());
         save(&env, &key, &split);
         SplitCreated {
+            split: split.public(&env, &organizer),
             organizer,
             split_id,
-            split,
         }
         .publish(&env);
         Ok(true)
@@ -238,23 +265,19 @@ impl NaruSplit {
         participant.require_auth();
         let key = DataKey::Split(organizer.clone(), split_id.clone());
         let mut split = load(&env, &key)?;
-        let (index, mut share) = outstanding(&split, &participant)?;
+        let index = outstanding(&split, &organizer, &participant)?;
+        let amount = split.amount(index);
         let ledger = env.ledger().sequence();
-        share.state = ShareState::Paid(ledger);
-        split.shares.set(index, share.clone());
+        split.finish(index, 1, ledger);
         save(&env, &key, &split);
         // A failing transfer aborts this invocation, rolling back the settlement,
         // TTL updates, token changes, and events together. No caught token errors.
-        TokenClient::new(&env, &token(&env)).transfer(
-            &participant,
-            &split.recipient,
-            &share.amount,
-        );
+        TokenClient::new(&env, &token(&env)).transfer(&participant, &organizer, &amount);
         SharePaid {
             organizer,
             split_id,
             participant,
-            amount: share.amount,
+            amount,
             ledger,
         }
         .publish(&env);
@@ -271,28 +294,29 @@ impl NaruSplit {
         organizer.require_auth();
         let key = DataKey::Split(organizer.clone(), split_id.clone());
         let mut split = load(&env, &key)?;
-        let (index, mut share) = outstanding(&split, &participant)?;
+        let index = outstanding(&split, &organizer, &participant)?;
+        let amount = split.amount(index);
         let ledger = env.ledger().sequence();
-        share.state = ShareState::Cancelled(ledger);
-        split.shares.set(index, share.clone());
+        split.finish(index, 2, ledger);
         save(&env, &key, &split);
         ShareCancelled {
             organizer,
             split_id,
             participant,
-            amount: share.amount,
+            amount,
             ledger,
         }
         .publish(&env);
         Ok(())
     }
 
-    /// Bounded public state; successful reads also extend TTL when submitted.
+    /// Bounded public state. Reads do not renew rent; use keep_alive explicitly.
     pub fn get(env: Env, organizer: Address, split_id: BytesN<32>) -> Option<Split> {
-        let key = DataKey::Split(organizer, split_id);
-        let split = env.storage().persistent().get(&key);
-        extend(&env, split.as_ref().map(|_: &Split| &key));
-        split
+        let key = DataKey::Split(organizer.clone(), split_id);
+        env.storage()
+            .persistent()
+            .get::<_, StoredSplit>(&key)
+            .map(|split| split.public(&env, &organizer))
     }
 
     pub fn usdc(env: Env) -> Address {
@@ -303,7 +327,7 @@ impl NaruSplit {
     pub fn keep_alive(env: Env, organizer: Address, split_id: BytesN<32>) -> Result<(), Error> {
         let key = DataKey::Split(organizer, split_id);
         load(&env, &key)?;
-        extend(&env, Some(&key));
+        extend(&env, &key);
         Ok(())
     }
 }

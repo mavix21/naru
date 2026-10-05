@@ -5,7 +5,7 @@ target
 # project identity and alias files will be in .config/stellar
 .config
 
-# test snapshot folders from sample contracts
+# Rust test snapshots
 test_snapshots
 test-results/
 playwright-report/
@@ -39,10 +39,6 @@ lerna-debug.log*
 
 # macOS-specific files
 .DS_Store
-
-# generated contract bindings + clients (Binding packages and flattened index.ts)
-app-lib/clients/*
-!app-lib/clients/.gitkeep
 
 # Agent/editor scratch
 .claude/

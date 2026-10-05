@@ -21,7 +21,14 @@ export const TEST_FUNDING = {
 export const jobSchema = z.object({
   id: z.string(),
   account: z.string(),
-  kind: z.enum(["deploy", "fund", "transfer", "swap"]),
+  kind: z.enum([
+    "deploy",
+    "fund",
+    "transfer",
+    "swap",
+    "split_create",
+    "split_keep_alive",
+  ]),
   state: z.enum(["review", "preparing", "pending", "confirmed", "failed"]),
   hash: z.string().nullable(),
   ledger: z.number().nullable(),
