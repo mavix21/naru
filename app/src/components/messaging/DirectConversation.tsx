@@ -91,9 +91,11 @@ function subscribeOnline(listener: () => void) {
 export function DirectConversation({
   conversationId,
   userId,
+  loading,
 }: {
   conversationId: Id<"directConversations">;
   userId: string;
+  loading: ReactNode;
 }) {
   // Selection is browser state; only this interactive thread subscribes to its history.
   const detail = useQuery(api.directMessages.detail, { conversationId });
@@ -136,7 +138,7 @@ export function DirectConversation({
   const newest = results[0]?.sequence ?? 0;
   const oldest = results.at(-1)?.sequence ?? 0;
   const readSequence = detail?.readSequence;
-  const loaded = !!detail;
+  const loaded = !!detail && status !== "LoadingFirstPage" && hydrated;
 
   const acknowledged =
     !!draft.pending &&
@@ -173,6 +175,7 @@ export function DirectConversation({
 
   useEffect(() => {
     if (
+      !loaded ||
       !focused ||
       !atBottom ||
       readSequence === undefined ||
@@ -188,6 +191,7 @@ export function DirectConversation({
 
     return () => clearTimeout(timer);
   }, [
+    loaded,
     focused,
     atBottom,
     newest,
@@ -208,7 +212,7 @@ export function DirectConversation({
     else if (atBottom || !before.newest)
       element.scrollTop = element.scrollHeight;
     previous.current = { height: element.scrollHeight, oldest, newest };
-  }, [oldest, newest, draft.pending, detail, status, atBottom]);
+  }, [loaded, oldest, newest, draft.pending, detail, status, atBottom]);
 
   useLayoutEffect(() => {
     const element = viewport.current;
@@ -240,7 +244,7 @@ export function DirectConversation({
       input.style.height = "auto";
       input.style.height = `${Math.min(input.scrollHeight, 120)}px`;
     }
-  }, [draft.text, detail]);
+  }, [loaded, draft.text, detail]);
 
   async function submit(retry = false) {
     const current = readDraft();
@@ -295,22 +299,9 @@ export function DirectConversation({
     }
   }
 
-  if (!detail)
-    return (
-      <section
-        className="flex min-h-0 flex-1 flex-col"
-        aria-label="Loading conversation"
-      >
-        <header className="flex h-19 items-center gap-3 border-b px-4">
-          <BackToChats />
-          <div className="size-10 animate-pulse rounded-full bg-muted" />
-          <div className="h-3 w-28 animate-pulse rounded bg-muted" />
-        </header>
-        <output className="m-auto text-sm text-muted-foreground">
-          Loading messages…
-        </output>
-      </section>
-    );
+  // Keep the server-rendered placeholder through every initial client read.
+  // Reveal the header, history, and composer together, including restored drafts.
+  if (!detail || !loaded) return loading;
 
   const messages = [...results].reverse();
 
@@ -373,24 +364,17 @@ export function DirectConversation({
                 </Button>
               </div>
             )}
-            {status === "LoadingFirstPage" && (
-              <output className="m-auto text-sm text-muted-foreground">
-                Loading messages…
-              </output>
+            {!messages.length && !draft.pending && (
+              <div className="m-auto flex flex-col items-center px-4 py-12 text-center">
+                <PersonAvatar person={detail.person} className="size-16" />
+                <h3 className="mt-4 text-base font-medium">
+                  {detail.person.displayName}
+                </h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Say hello. This is the start of your conversation.
+                </p>
+              </div>
             )}
-            {status !== "LoadingFirstPage" &&
-              !messages.length &&
-              !draft.pending && (
-                <div className="m-auto flex flex-col items-center px-4 py-12 text-center">
-                  <PersonAvatar person={detail.person} className="size-16" />
-                  <h3 className="mt-4 text-base font-medium">
-                    {detail.person.displayName}
-                  </h3>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Say hello. This is the start of your conversation.
-                  </p>
-                </div>
-              )}
             <div className="mt-auto">
               {messages.map((message, index) => {
                 const own = message.author.profileId === detail.me;

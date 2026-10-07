@@ -1,5 +1,7 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 import { useAuth, UserButton } from "@clerk/nextjs";
 import { api } from "@naru/backend/api";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
@@ -17,61 +19,19 @@ import {
 
 import { CompanionScene } from "./CompanionScene";
 import { Frame, Heading, Notice, Scene, SceneCopy } from "./Frame";
-import { Activate, ActivationLoading, Home } from "./Home";
-import { Customize, Welcome } from "./PublicExperience";
+import { Activate, Home } from "./Home";
+import { Customize } from "./PublicExperience";
 
-export type Screen = "welcome" | "create" | "home" | "activate";
+export type Screen = "create" | "home" | "activate";
 
-function Navigate({ to }: { to: string }) {
+function Navigate({ to, loading }: { to: string; loading: ReactNode }) {
   const router = useRouter();
 
   useEffect(() => {
     router.replace(to);
   }, [router, to]);
 
-  return (
-    <Loading account={to === "/activate"} activation={to === "/activate"} />
-  );
-}
-
-function Loading({
-  account = false,
-  activation = false,
-}: {
-  account?: boolean;
-  activation?: boolean;
-}) {
-  const [slow, setSlow] = useState(false);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setSlow(true), 12_000);
-
-    return () => clearTimeout(timer);
-  }, []);
-
-  if (activation) return <ActivationLoading account={account} slow={slow} />;
-
-  return (
-    <Frame controls={account ? <UserButton /> : undefined}>
-      <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
-        <output className="text-sm text-muted-foreground">
-          {slow
-            ? "Your connection is taking a little longer."
-            : "Getting your companion ready…"}
-        </output>
-        {slow && (
-          <Button
-            type="button"
-            variant="link"
-            size="sm"
-            onClick={() => window.location.reload()}
-          >
-            Try again
-          </Button>
-        )}
-      </div>
-    </Frame>
-  );
+  return loading;
 }
 
 function SaveCompanion() {
@@ -128,9 +88,11 @@ function SaveCompanion() {
 function AuthenticatedExperience({
   screen,
   userId,
+  loading,
 }: {
   screen: Screen;
   userId: string;
+  loading: ReactNode;
 }) {
   const { isAuthenticated, isLoading } = useConvexAuth();
 
@@ -155,19 +117,17 @@ function AuthenticatedExperience({
     profile === undefined ||
     !hydrated
   )
-    return <Loading account activation={screen === "activate"} />;
-
-  if (screen === "welcome") return <Navigate to="/home" />;
+    return loading;
 
   if (!companion) {
     if (screen === "create") return <Customize signedIn />;
 
     if (draft.saveRequested && validName(draft.name)) return <SaveCompanion />;
 
-    return <Navigate to="/create" />;
+    return <Navigate to="/create" loading={loading} />;
   }
 
-  if (screen === "create") return <Navigate to="/home" />;
+  if (screen === "create") return <Navigate to="/home" loading={loading} />;
 
   if (!companion.paymentChoiceMade && !profile?.username)
     return (
@@ -184,29 +144,34 @@ function AuthenticatedExperience({
   if (screen === "activate")
     return <Activate companion={companion} userId={userId} />;
 
-  if (!companion.paymentChoiceMade) return <Navigate to="/activate" />;
+  if (!companion.paymentChoiceMade)
+    return <Navigate to="/activate" loading={loading} />;
 
   return <Home companion={companion} userId={userId} />;
 }
 
-export function SessionExperience({ screen }: { screen: Screen }) {
+export function SessionExperience({
+  screen,
+  loading,
+}: {
+  screen: Screen;
+  loading: ReactNode;
+}) {
   const { isLoaded, userId } = useAuth();
 
-  if (!isLoaded)
-    return screen === "welcome" ? (
-      <Welcome />
-    ) : (
-      <Loading activation={screen === "activate"} />
-    );
+  if (!isLoaded) return loading;
 
   if (userId)
     return (
-      <AuthenticatedExperience key={userId} screen={screen} userId={userId} />
+      <AuthenticatedExperience
+        key={userId}
+        screen={screen}
+        userId={userId}
+        loading={loading}
+      />
     );
-
-  if (screen === "welcome") return <Welcome />;
 
   if (screen === "create") return <Customize />;
 
-  return <Navigate to="/sign-in" />;
+  return <Navigate to="/sign-in" loading={loading} />;
 }

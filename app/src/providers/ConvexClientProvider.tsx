@@ -12,7 +12,16 @@ export function ConvexClientProvider({
   children: ReactNode;
   url: string;
 }) {
-  const [client] = useState(() => new ConvexReactClient(url));
+  const [client] = useState(
+    () =>
+      new ConvexReactClient(url, {
+        // Keep server-preloaded private data until Clerk supplies its token.
+        expectAuth: true,
+        // Convex's console logger generates random IDs. Enable it only where
+        // this client connects, so the provider can prerender the static shell.
+        logger: typeof window !== "undefined",
+      }),
+  );
 
   return (
     <ConvexProviderWithClerk client={client} useAuth={useAuth}>

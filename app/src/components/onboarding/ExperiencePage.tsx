@@ -1,14 +1,49 @@
+import { auth } from "@clerk/nextjs/server";
+import { redirect } from "next/navigation";
+import { Suspense } from "react";
+
 import { SetupNotice } from "@/components/auth/SetupNotice";
+import { LoadingStatus } from "@/components/LoadingStatus";
+import { HomeLoading } from "@/components/messaging/HomeLoading";
 import { getAuthConfig } from "@/lib/auth/config";
 
+import { CustomizeLoading } from "./CustomizeLoading";
 import { Frame } from "./Frame";
-import { Customize, Welcome } from "./PublicExperience";
+import { ActivationLoading } from "./Home";
+import { Customize } from "./PublicExperience";
 import { SessionExperience, type Screen } from "./SessionExperience";
+import { Welcome } from "./Welcome";
 
-export function ExperiencePage({ screen }: { screen: Screen }) {
-  if (getAuthConfig()) return <SessionExperience screen={screen} />;
+export function ExperiencePage({ screen }: { screen: Screen | "welcome" }) {
+  const configured = getAuthConfig();
 
-  if (screen === "welcome") return <Welcome />;
+  if (screen === "welcome")
+    return configured ? (
+      <Suspense fallback={<Welcome />}>
+        <WelcomeSession />
+      </Suspense>
+    ) : (
+      <Welcome />
+    );
+
+  if (configured)
+    return (
+      <SessionExperience
+        screen={screen}
+        loading={
+          screen === "home" ? (
+            <HomeLoading />
+          ) : screen === "activate" ? (
+            <>
+              <ActivationLoading />
+              <LoadingStatus />
+            </>
+          ) : (
+            <CustomizeLoading />
+          )
+        }
+      />
+    );
 
   if (screen === "create") return <Customize />;
 
@@ -19,4 +54,12 @@ export function ExperiencePage({ screen }: { screen: Screen }) {
       </div>
     </Frame>
   );
+}
+
+async function WelcomeSession() {
+  const { userId } = await auth();
+
+  if (userId) redirect("/home");
+
+  return <Welcome />;
 }
