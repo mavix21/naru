@@ -57,7 +57,7 @@
     "convex-test": "0.0.60",
     "husky": "^9.1.7",
     "jsqr": "^1.4.0",
-    "lint-staged": "^16.4.0",
+    "lint-staged": "^17.6.0",
     "oxfmt": "^0.70.0",
     "oxlint": "^1.85.0",
     "tailwindcss": "^4.3.3",
