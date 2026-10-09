@@ -38,7 +38,7 @@ function PopoverContent({
   Pick<
     PopoverPrimitive.Positioner.Props,
     "align" | "alignOffset" | "side" | "sideOffset"
-  > & { variant?: "homeMenu" | "people" }) {
+  > & { variant?: "homeMenu" | "people" | "accountMenu" }) {
   return (
     <PopoverPrimitive.Portal>
       <PopoverPrimitive.Positioner
@@ -56,6 +56,8 @@ function PopoverContent({
               "border bg-background p-5 shadow-xl shadow-black/5 md:p-6",
             variant === "people" &&
               "gap-0 border bg-background p-0 shadow-xl shadow-black/5",
+            variant === "accountMenu" &&
+              "gap-0 rounded-2xl border bg-background p-2 shadow-xl shadow-black/5",
             className,
           )}
           {...props}

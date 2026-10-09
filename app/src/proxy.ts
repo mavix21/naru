@@ -1,6 +1,4 @@
 import { clerkMiddleware } from "@clerk/nextjs/server";
-import { api } from "@naru/backend/api";
-import { fetchQuery } from "convex/nextjs";
 import {
   NextResponse,
   type NextFetchEvent,
@@ -22,28 +20,18 @@ export async function proxy(request: NextRequest, event: NextFetchEvent) {
   }
 
   if (handle.startsWith("@")) {
-    // Resolve before Next starts streaming so unknown usernames have a real
-    // HTTP 404 (a notFound() inside Suspense alone would stream a 200).
-    const profile = await fetchQuery(api.profiles.publicByUsername, {
-      username: handle.slice(1),
-    });
+    // Normalize the URL here; the profile route owns data and not-found UI.
+    if (/^@[a-z][a-z0-9_]{2,23}$/i.test(handle)) {
+      const pathname = profilePath(handle.slice(1));
 
-    if (!profile) {
-      const response = NextResponse.rewrite(
-        new URL("/profile-not-found", request.url),
-        { status: 404 },
-      );
+      if (request.nextUrl.pathname !== pathname) {
+        const url = request.nextUrl.clone();
+        url.pathname = pathname;
 
-      response.headers.set("Cache-Control", "no-store");
-
-      return response;
+        return NextResponse.redirect(url, 308);
+      }
     }
 
-    if (request.nextUrl.pathname !== profilePath(profile.username))
-      return NextResponse.redirect(
-        new URL(profilePath(profile.username), request.url),
-        308,
-      );
     const response = NextResponse.next();
     response.headers.set("Cache-Control", "no-store");
 
@@ -67,6 +55,7 @@ export const config = {
     "/home",
     "/activate",
     "/username",
+    "/account/:path*",
     "/:handle",
     "/api/payments",
     "/api/chat",

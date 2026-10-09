@@ -8,7 +8,6 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
-import { AccountPanel } from "@/components/conversation/AccountPanel";
 import { CompanionSettings } from "@/components/conversation/CompanionSettings";
 import { Conversation } from "@/components/conversation/Conversation";
 import { HomeMenu } from "@/components/conversation/HomeMenu";
@@ -26,9 +25,8 @@ import { MobileTools } from "@/components/messaging/MobileTools";
 import { SessionMenu } from "@/components/messaging/SessionMenu";
 import { CompanionScene } from "@/components/onboarding/CompanionScene";
 import { ExperiencePage } from "@/components/onboarding/ExperiencePage";
+import { AccountMenu } from "@/components/profile/AccountMenu";
 import { IdentitySync } from "@/components/profile/IdentitySync";
-import { ProfileSettings } from "@/components/profile/ProfileSettings";
-import { ProfileSharing } from "@/components/profile/ProfileSharing";
 import { People } from "@/components/social/People";
 import { SocialMenus } from "@/components/social/SocialMenus";
 import { getAuthConfig } from "@/lib/auth/config";
@@ -65,7 +63,7 @@ async function AuthenticatedHome() {
 
   const accountPanel = (
     <Suspense fallback={<PanelLoading />}>
-      <AccountDetails data={data} userId={userId} />
+      <AccountDetails data={data} />
     </Suspense>
   );
 
@@ -90,7 +88,9 @@ async function AuthenticatedHome() {
       tools={
         <>
           <div className="hidden items-center gap-5 md:flex">
-            <HomeMenu label="Account">{accountPanel}</HomeMenu>
+            <HomeMenu label="Account" compact>
+              {accountPanel}
+            </HomeMenu>
             <HomeMenu label="Activity">{activityPanel}</HomeMenu>
             <HomeMenu label="Companion">{companionPanel}</HomeMenu>
           </div>
@@ -117,7 +117,6 @@ async function AuthenticatedHome() {
 function preloadHome(token: string) {
   const data = {
     conversation: preloadQuery(api.conversations.current, {}, { token }),
-    payments: preloadQuery(api.payments.current, {}, { token }),
     operations: preloadQuery(api.operations.recent, {}, { token }),
     social: preloadQuery(api.social.current, {}, { token }),
     notifications: preloadQuery(api.notifications.current, {}, { token }),
@@ -143,17 +142,14 @@ type HomeRegionProps = { data: HomeData; userId: string };
 
 type WorkspaceProps = HomeRegionProps & { companion: Doc<"companions"> };
 
-async function AccountDetails({ data, userId }: HomeRegionProps) {
-  const [payments, profile] = await Promise.all([data.payments, data.profile]);
+async function AccountDetails({ data }: { data: HomeData }) {
+  const profile = await data.profile;
 
   return (
-    <>
-      <AccountPanel preloaded={payments} userId={userId} />
-      <div className="mt-6 space-y-5 border-t pt-5">
-        <ProfileSettings />
-        {profile?.username && <ProfileSharing username={profile.username} />}
-      </div>
-    </>
+    <AccountMenu
+      displayName={profile?.displayName || profile?.username || "Naru friend"}
+      username={profile?.username}
+    />
   );
 }
 

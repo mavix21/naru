@@ -3,7 +3,9 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
 import { Frame } from "@/components/onboarding/Frame";
+import { ProfileFormSkeleton } from "@/components/profile/AccountSkeletons";
 import { IdentitySync } from "@/components/profile/IdentitySync";
+import { ProfileDetailsHeading } from "@/components/profile/ProfileDetailsHeading";
 import { UsernameCompletion } from "@/components/profile/UsernameCompletion";
 
 export default function Page() {
@@ -29,7 +31,10 @@ async function Completion() {
     <Frame back="/home">
       <IdentitySync key={userId} />
       <section className="mx-auto w-full max-w-110 flex-1 py-10 md:py-18">
-        <UsernameCompletion />
+        <UsernameCompletion
+          profileHeading={<ProfileDetailsHeading />}
+          profileLoading={<ProfileFormSkeleton />}
+        />
       </section>
     </Frame>
   );

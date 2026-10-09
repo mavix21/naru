@@ -1,5 +1,7 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 import { api } from "@naru/backend/api";
 import { useConvexAuth, useQuery } from "convex/react";
 import Link from "next/link";
@@ -9,7 +11,13 @@ import { profilePath } from "@/lib/profile";
 
 import { ProfileSettings } from "./ProfileSettings";
 
-export function UsernameCompletion() {
+export function UsernameCompletion({
+  profileHeading,
+  profileLoading,
+}: {
+  profileHeading: ReactNode;
+  profileLoading: ReactNode;
+}) {
   const { isAuthenticated } = useConvexAuth();
   const profile = useQuery(api.profiles.current, isAuthenticated ? {} : "skip");
 
@@ -33,7 +41,7 @@ export function UsernameCompletion() {
       )}
       {profile && (
         <div className="border-t pt-6">
-          <ProfileSettings />
+          <ProfileSettings heading={profileHeading} loading={profileLoading} />
         </div>
       )}
       <Link

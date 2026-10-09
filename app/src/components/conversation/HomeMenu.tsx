@@ -11,9 +11,11 @@ import {
 export function HomeMenu({
   label,
   children,
+  compact = false,
 }: {
   label: string;
   children: ReactNode;
+  compact?: boolean;
 }) {
   return (
     <Popover>
@@ -22,8 +24,12 @@ export function HomeMenu({
         align="end"
         sideOffset={8}
         aria-label={label}
-        variant="homeMenu"
-        className="max-h-[min(70dvh,680px)] w-[calc(100vw-2rem)] overflow-y-auto md:w-96"
+        variant={compact ? "accountMenu" : "homeMenu"}
+        className={
+          compact
+            ? "w-72 max-w-[calc(100vw-2rem)]"
+            : "max-h-[min(70dvh,680px)] w-[calc(100vw-2rem)] overflow-y-auto md:w-96"
+        }
       >
         {children}
       </PopoverContent>

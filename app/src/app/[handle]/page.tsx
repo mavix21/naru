@@ -3,18 +3,21 @@ import type { Metadata } from "next";
 import { api } from "@naru/backend/api";
 import { fetchQuery } from "convex/nextjs";
 import { io } from "next/cache";
+import Image from "next/image";
 import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
 import { connection } from "next/server";
 import { cache, Suspense } from "react";
 
-import { CompanionScene } from "@/components/onboarding/CompanionScene";
 import { Frame } from "@/components/onboarding/Frame";
+import { ProfileAvatar } from "@/components/profile/ProfileAvatar";
 import {
   canonicalProfileUrl,
   ProfileSharing,
 } from "@/components/profile/ProfileSharing";
+import { accents } from "@/lib/companion-art";
 import { profilePath } from "@/lib/profile";
+import { cn } from "@/lib/utils";
 
 type Props = { params: Promise<{ handle: string }> };
 
@@ -67,7 +70,7 @@ export default function Page(props: Props) {
       fallback={
         <Frame>
           <output className="py-20 text-center text-sm text-muted-foreground">
-            Meeting this Naru…
+            Loading this profile…
           </output>
         </Frame>
       }
@@ -83,52 +86,104 @@ async function PublicProfile({ params }: Props) {
   await connection();
   const profile = await getProfile((await params).handle);
 
+  const accent = accents.find(
+    (option) => option.id === profile.companion.accent,
+  )!;
+
   return (
     <Frame
-      controls={
-        <Link
-          href="/create"
-          className="text-xs font-medium underline underline-offset-4"
-        >
-          Meet your Naru ↗
-        </Link>
-      }
+      className="max-w-6xl"
+      controls={<ProfileSharing username={profile.username} />}
     >
-      <article className="my-auto grid items-center gap-8 py-8 md:grid-cols-2 md:gap-16 md:py-16">
-        <div className="flex flex-col items-center gap-5">
-          <CompanionScene
-            name={profile.companion.name}
-            accent={profile.companion.accent}
-          />
-          <p className="text-[10px] font-medium tracking-[.14em] text-muted-foreground uppercase">
-            A little company, a lot of personality
-          </p>
-        </div>
-        <div className="mx-auto w-full min-w-0 max-w-110 space-y-7">
-          <div className="space-y-3">
-            <p className="text-[10px] font-semibold tracking-[.15em] text-muted-foreground uppercase">
-              A little corner of Naru
-            </p>
-            <h1 className="text-4xl leading-[1.12] tracking-[-.055em] wrap-anywhere md:text-5xl">
-              {profile.displayName}
-            </h1>
-            <p className="text-sm text-muted-foreground">@{profile.username}</p>
-            {profile.bio && (
-              <p className="pt-2 text-sm leading-7 wrap-anywhere text-muted-foreground">
-                {profile.bio}
-              </p>
+      <article className="flex-1 pb-12">
+        <div
+          aria-hidden="true"
+          className={cn(
+            "relative h-36 overflow-hidden rounded-3xl md:h-48",
+            accent.surface,
+          )}
+        >
+          <div
+            className={cn(
+              "absolute -top-40 -left-12 size-96 rounded-full opacity-20 md:left-10",
+              accent.swatch,
             )}
-          </div>
-          <div className="border-t border-border/70 pt-5">
-            <p className="mb-5 text-xs leading-6 wrap-anywhere text-muted-foreground">
-              Together with{" "}
-              <span className="font-medium text-foreground">
-                {profile.companion.name}
-              </span>
-              , their everyday companion.
+          />
+          <div className="absolute -right-16 -bottom-64 size-120 rounded-full border-[40px] border-white/40 md:right-10" />
+          <div className="absolute top-10 right-1/3 size-16 rounded-full border border-ring/15 md:size-24" />
+        </div>
+        <header className="relative mx-auto -mt-12 flex max-w-xl flex-col items-center px-4 text-center">
+          <ProfileAvatar
+            name={profile.displayName}
+            accent={profile.companion.accent}
+            className="size-24 border-[5px] border-background text-3xl shadow-sm"
+          />
+          <h1 className="mt-5 max-w-full text-3xl leading-tight font-medium tracking-[-.04em] wrap-anywhere md:text-4xl">
+            {profile.displayName}
+          </h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            @{profile.username}
+          </p>
+          <p className="mt-4 flex max-w-full items-center gap-2 rounded-full border px-3 py-1.5 text-xs text-muted-foreground">
+            <span
+              aria-hidden="true"
+              className={cn("size-1.5 shrink-0 rounded-full", accent.swatch)}
+            />
+            <span className="wrap-anywhere">
+              On Naru with {profile.companion.name}
+            </span>
+          </p>
+        </header>
+        <div className="mx-auto mt-10 grid max-w-4xl items-start gap-5 md:mt-12 md:grid-cols-[minmax(0,1fr)_19rem] md:gap-6">
+          <section
+            aria-labelledby="about-heading"
+            className="min-w-0 rounded-3xl border bg-card p-6 md:p-8"
+          >
+            <h2 id="about-heading" className="text-base font-medium">
+              About me
+            </h2>
+            <p className="mt-4 text-sm leading-7 wrap-anywhere text-muted-foreground">
+              {profile.bio ||
+                `A little corner of Naru, shared with ${profile.companion.name}.`}
             </p>
-            <ProfileSharing username={profile.username} />
-          </div>
+          </section>
+          <aside
+            aria-labelledby="companion-heading"
+            className="overflow-hidden rounded-3xl border bg-card"
+          >
+            <div className={cn("flex justify-center py-3", accent.surface)}>
+              <Image
+                src={accent.image}
+                alt={`${profile.companion.name}, the Naru bird`}
+                width={192}
+                height={192}
+                sizes="192px"
+                className="size-44 object-contain"
+              />
+            </div>
+            <div className="p-6">
+              <p className="text-xs text-muted-foreground">
+                My everyday companion
+              </p>
+              <h2
+                id="companion-heading"
+                className="mt-2 text-xl font-medium tracking-tight wrap-anywhere"
+              >
+                Meet {profile.companion.name}
+              </h2>
+              <p className="mt-3 text-sm leading-6 text-muted-foreground">
+                A little company for life, and everything money.
+              </p>
+            </div>
+          </aside>
+        </div>
+        <div className="mt-12 text-center">
+          <Link
+            href="/create"
+            className="inline-flex min-h-11 items-center gap-2 rounded-full border px-5 text-xs font-medium transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
+          >
+            Meet your own Naru <span aria-hidden="true">↗</span>
+          </Link>
         </div>
       </article>
     </Frame>

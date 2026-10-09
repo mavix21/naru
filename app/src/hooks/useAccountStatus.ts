@@ -8,6 +8,9 @@ import { fundingInProgress, type Job } from "@/lib/smart-account/shared";
 
 export function useAccountStatus(userId: string, funding?: Job) {
   return useQuery({
+    // Reuse recent chain reads across account/chat mounts and tab switches.
+    // Pending funding still polls below, and explicit invalidations stay fresh.
+    staleTime: 30_000,
     queryKey: funding
       ? ["conversation-account", userId, funding.id]
       : ["conversation-account", userId],

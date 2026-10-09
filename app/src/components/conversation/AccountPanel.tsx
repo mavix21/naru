@@ -4,7 +4,6 @@ import { api } from "@naru/backend/api";
 import { usePreloadedQuery, type Preloaded } from "convex/react";
 import Link from "next/link";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAccountStatus } from "@/hooks/useAccountStatus";
 import { displayAmount } from "@/lib/money";
@@ -25,10 +24,6 @@ export function AccountPanel({
 
   return (
     <div className="text-sm">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="font-medium">Your wallet</h2>
-        <Badge variant="secondary">Testnet</Badge>
-      </div>
       {payment?.state === "ready" && payment.account ? (
         <>
           <WalletAddress address={payment.account} />

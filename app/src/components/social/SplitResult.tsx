@@ -174,76 +174,85 @@ export function SplitResult({
             return (
               <div
                 key={share.person.userId}
-                className="flex items-center gap-3 py-3"
+                className="grid grid-cols-[2.25rem_minmax(0,1fr)] items-start gap-x-3 py-3"
               >
                 <PersonAvatar person={share.person} className="size-9" />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">
-                    {ownShare && isOrganizer ? "You" : share.person.displayName}
-                  </p>
-                  <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
-                    {ownShare
-                      ? "Organizer · own share"
-                      : `@${share.person.username}`}
-                  </p>
-                </div>
-                <div className="shrink-0 space-y-1 text-right">
-                  <p className="text-sm font-medium tabular-nums">
+                <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3 gap-y-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">
+                      {ownShare && isOrganizer
+                        ? "You"
+                        : share.person.displayName}
+                    </p>
+                    <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
+                      {ownShare
+                        ? "Organizer · own share"
+                        : `@${share.person.username}`}
+                    </p>
+                  </div>
+                  <p className="text-right text-sm font-medium whitespace-nowrap tabular-nums">
                     {displayAmount(share.units)}{" "}
                     <span className="text-[10px] font-normal text-muted-foreground">
                       {split.asset}
                     </span>
                   </p>
-                  {request ? (
-                    <RequestStatus state={request.state} />
-                  ) : (
-                    <span className="text-[10px] text-muted-foreground">
-                      {ownShare ? "Not requested" : "Awaiting delivery"}
-                    </span>
-                  )}
-                </div>
-                {!ownShare && isOrganizer && (
-                  <div className="flex flex-col gap-1">
-                    <Button
-                      size="icon-xs"
-                      variant="ghost"
-                      disabled={!!busy}
-                      aria-label={`Open chat with ${share.person.displayName}`}
-                      title="Open chat"
-                      onClick={() => void act(share.person.userId)}
-                    >
-                      <IconMessage aria-hidden="true" />
-                    </Button>
-                    {split.asset === "XLM" &&
-                      request &&
-                      (request.state === "outstanding" ||
-                        request.state === "declined") && (
+                  <div className="flex min-h-7 items-center">
+                    {request ? (
+                      <RequestStatus state={request.state} />
+                    ) : (
+                      <span className="text-[10px] text-muted-foreground">
+                        {ownShare ? "Not requested" : "Awaiting delivery"}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex min-h-7 items-center justify-end gap-1">
+                    {!ownShare && isOrganizer && (
+                      <>
                         <Button
                           size="icon-xs"
                           variant="ghost"
                           disabled={!!busy}
-                          aria-label={`Cancel request for ${share.person.displayName}`}
-                          title="Cancel request"
-                          onClick={() =>
-                            void act(share.person.userId, request._id)
-                          }
+                          aria-label={`Open chat with ${share.person.displayName}`}
+                          title="Open chat"
+                          onClick={() => void act(share.person.userId)}
                         >
-                          <IconX aria-hidden="true" />
+                          <IconMessage aria-hidden="true" />
                         </Button>
-                      )}
+                        {split.asset === "XLM" &&
+                          request &&
+                          (request.state === "outstanding" ||
+                            request.state === "declined") && (
+                            <Button
+                              size="icon-xs"
+                              variant="ghost"
+                              disabled={!!busy}
+                              aria-label={`Cancel request for ${share.person.displayName}`}
+                              title="Cancel request"
+                              onClick={() =>
+                                void act(share.person.userId, request._id)
+                              }
+                            >
+                              <IconX aria-hidden="true" />
+                            </Button>
+                          )}
+                      </>
+                    )}
+                    {request?.hash && (
+                      <a
+                        href={`https://stellar.expert/explorer/testnet/tx/${request.hash}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        aria-label={`View ${share.person.displayName}’s payment receipt`}
+                        className="flex size-7 items-center justify-center rounded-full text-muted-foreground outline-ring hover:bg-muted hover:text-primary"
+                      >
+                        <IconArrowUpRight
+                          className="size-3.5"
+                          aria-hidden="true"
+                        />
+                      </a>
+                    )}
                   </div>
-                )}
-                {request?.hash && (
-                  <a
-                    href={`https://stellar.expert/explorer/testnet/tx/${request.hash}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    aria-label={`View ${share.person.displayName}’s payment receipt`}
-                    className="rounded-full p-1.5 text-muted-foreground outline-ring hover:bg-muted hover:text-primary"
-                  >
-                    <IconArrowUpRight className="size-3.5" aria-hidden="true" />
-                  </a>
-                )}
+                </div>
               </div>
             );
           })}
