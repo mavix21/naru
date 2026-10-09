@@ -38,6 +38,14 @@ export default defineSchema({
   profiles: defineTable(profileFields)
     .index("by_clerk_user", ["clerkUserId"])
     .index("by_username", ["username"]),
+  // Durable reservations bridge Clerk and Convex. Never expire an uncertain
+  // Clerk write: the next request resumes it using the same reservation ID.
+  usernameClaims: defineTable({
+    clerkUserId: v.string(),
+    username: v.string(),
+  })
+    .index("by_clerk_user", ["clerkUserId"])
+    .index("by_username", ["username"]),
   socialLimits: defineTable({
     key: v.string(),
     window: v.number(),

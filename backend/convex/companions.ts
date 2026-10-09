@@ -57,7 +57,7 @@ export const save = mutation({
 
     if (profile) {
       await ctx.db.patch(profile._id, {
-        onboardingStatus: "complete",
+        onboardingStatus: profile.username ? "complete" : "incomplete",
         updatedAt: now,
       });
     } else {
@@ -66,7 +66,7 @@ export const save = mutation({
         createdAt: now,
         updatedAt: now,
         preferredGreeting: "Hello",
-        onboardingStatus: "complete",
+        onboardingStatus: "incomplete",
       });
     }
 
@@ -101,6 +101,16 @@ export const finishPaymentPrompt = mutation({
     const companion = await find(ctx, await userId(ctx));
 
     if (!companion) throw new ConvexError("COMPANION_NOT_FOUND");
+
+    const profile = await ctx.db
+      .query("profiles")
+      .withIndex("by_clerk_user", (q) =>
+        q.eq("clerkUserId", companion.clerkUserId),
+      )
+      .unique();
+
+    if (profile?.onboardingStatus !== "complete" && !profile?.username)
+      throw new ConvexError("Choose your username to finish onboarding.");
     await ctx.db.patch(companion._id, {
       paymentChoiceMade: true,
       updatedAt: Date.now(),

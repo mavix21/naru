@@ -50,6 +50,7 @@ export const profileFields = {
   clerkUserId: v.string(),
   username: v.optional(v.string()),
   displayName: v.optional(v.string()),
+  bio: v.optional(v.string()),
   createdAt: v.number(),
   updatedAt: v.number(),
   preferredGreeting: v.string(),

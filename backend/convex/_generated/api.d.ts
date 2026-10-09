@@ -18,6 +18,7 @@ import type * as notifications from "../notifications.js";
 import type * as operations from "../operations.js";
 import type * as payments from "../payments.js";
 import type * as privateHistory from "../privateHistory.js";
+import type * as profileRules from "../profileRules.js";
 import type * as profiles from "../profiles.js";
 import type * as replies from "../replies.js";
 import type * as social from "../social.js";
@@ -43,6 +44,7 @@ declare const fullApi: ApiFromModules<{
   operations: typeof operations;
   payments: typeof payments;
   privateHistory: typeof privateHistory;
+  profileRules: typeof profileRules;
   profiles: typeof profiles;
   replies: typeof replies;
   social: typeof social;

@@ -11,46 +11,6 @@ import {
   throttle,
 } from "./socialShared";
 
-export const claimUsername = mutation({
-  args: { username: v.string(), displayName: v.string() },
-  handler: async (ctx, args) => {
-    const user = await requireUser(ctx);
-    const username = args.username.trim().toLowerCase();
-    const displayName = args.displayName.trim();
-
-    if (!/^[a-z][a-z0-9_]{2,23}$/.test(username))
-      throw new ConvexError(
-        "Use 3-24 letters, numbers or underscores, starting with a letter.",
-      );
-
-    if (
-      !displayName ||
-      displayName.length > 60 ||
-      /[\p{Cc}\p{Cf}]/u.test(displayName)
-    )
-      throw new ConvexError("Use a display name of 1-60 characters.");
-    const profile = await profileFor(ctx, user);
-
-    if (!profile) throw new ConvexError("Save your companion first.");
-
-    // The index read participates in Convex's serializable transaction, including
-    // empty-range conflicts: simultaneous case-insensitive claims cannot both win.
-    const existing = await ctx.db
-      .query("profiles")
-      .withIndex("by_username", (q) => q.eq("username", username))
-      .unique();
-
-    if (existing && existing._id !== profile._id)
-      throw new ConvexError("That username is already taken.");
-    await throttle(ctx, `username:${user}`, 6);
-    await ctx.db.patch(profile._id, {
-      username,
-      displayName,
-      updatedAt: Date.now(),
-    });
-  },
-});
-
 export const current = query({
   args: {},
   handler: async (ctx) => {

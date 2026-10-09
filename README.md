@@ -166,12 +166,67 @@ solicitud de cambio. El usuario autoriza el swap y luego el envío por separado.
 Las identidades de los activos están en `backend/convex/money.ts`; las del
 mercado, en `app/src/lib/swaps/shared.ts`.
 
+### Perfiles públicos y configuración de Clerk
+
+Cada username de Naru tiene automáticamente un perfil anónimo en `/@username`.
+**Account → Your public profile** permite editar el nombre humano y la bio, ver
+el perfil y compartir su URL o QR. El nombre del compañero sigue en **Companion**.
+Las cuentas existentes sin username conservan chats y pagos; el recordatorio
+persistente lleva a `/username`.
+
+Configuración **manual** necesaria en cada instancia de Clerk (no aplicada por
+el código):
+
+1. **User & authentication → Username**: habilitar username y marcarlo como
+   **Required**. Ajustar la longitud a **3–24** y permitir letras, números y
+   guion bajo. Naru exige además empezar con una letra, normaliza a minúsculas y
+   rechaza nombres reservados en el servidor. Si Clerk acepta un formato más
+   amplio, Naru solicita corregirlo antes de completar el onboarding.
+2. **SSO connections → Google**: mantener Google habilitado. Los componentes
+   prebuilt `SignUp`/`SignIn` recogen los requisitos faltantes después de OAuth;
+   no hay un segundo formulario de registro. No exigir username mediante una
+   tarea global de sesión que bloquee a usuarios existentes.
+3. **User model → User permissions**: desactivar **Allow users to change their
+   username**. La finalización usa el Backend API y sigue funcionando con esta
+   restricción. El username confirmado de Naru es la autoridad; cambios directos
+   posteriores en Clerk se reconcilian hacia ese valor. No se ofrecen renombres.
+4. **Webhooks**: registrar `https://tu-dominio/api/webhooks/clerk` para
+   `user.created` y `user.updated`, y configurar `CLERK_WEBHOOK_SIGNING_SECRET`
+   en la app. Los eventos se verifican y se vuelve a leer el usuario actual para
+   resistir entregas duplicadas o desordenadas. Los fallos transitorios devuelven
+   503 para reintento; las colisiones requieren corregir el username.
+5. Configurar `NARU_PUBLIC_ORIGIN=https://tu-dominio` (sin ruta); si falta, se usa
+   `NARU_SMART_ACCOUNT_ORIGIN`. Compartir, metadatos y QR usan exactamente esa URL
+   canónica. La sincronización reutiliza el secreto servidor `NARU_PAYMENTS_KEY`
+   existente, con el mismo valor en app y Convex; no necesita activar pagos.
+6. Desplegar Convex antes de la app. Para importar los usernames de usuarios de
+   Clerk anteriores al webhook, ejecutar una vez `pnpm --dir app profiles:sync`.
+   Es reintentable: conserva usernames y nombres editados existentes, y reporta
+   conflictos sin reasignar handles. Las sesiones también reparan sincronizaciones
+   pendientes; una reserva no caduca mientras el resultado de Clerk sea incierto.
+
+Revisado contra **`@clerk/nextjs` 7.9.7**, instalado en este repo, y documentación
+oficial del 8 de octubre de 2026:
+[opciones de autenticación](https://clerk.com/docs/guides/configure/auth-strategies/sign-up-sign-in-options),
+[`SignUp`](https://clerk.com/docs/nextjs/reference/components/authentication/sign-up),
+[requisitos OAuth](https://clerk.com/docs/guides/development/custom-flows/authentication/oauth-connections#handle-missing-requirements),
+[sincronización](https://clerk.com/docs/guides/development/webhooks/syncing).
+
+Validación manual de despliegue: probar registro nuevo con Google y email,
+username faltante/reservado/ocupado, cuenta antigua con chats, reintento tras
+interrupción, nombre corregido conservado al volver a entrar, perfil en incógnito,
+404 desconocido, compartir/copiar y escanear QR en móvil. Los tests automatizados
+de perfiles cubren aislamiento público, autorización, colisiones concurrentes,
+reintentos, nombres y compartir; no sustituyen el login real con Google.
+
 ### Comprobaciones
 
 ```bash
 pnpm lint
 pnpm typecheck
 pnpm --dir app test
+pnpm --dir app exec playwright install chromium
+pnpm --dir app test:profiles:browser
 pnpm --dir backend test
 pnpm --dir contracts test
 pnpm build

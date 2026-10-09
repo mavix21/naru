@@ -26,6 +26,9 @@ import { MobileTools } from "@/components/messaging/MobileTools";
 import { SessionMenu } from "@/components/messaging/SessionMenu";
 import { CompanionScene } from "@/components/onboarding/CompanionScene";
 import { ExperiencePage } from "@/components/onboarding/ExperiencePage";
+import { IdentitySync } from "@/components/profile/IdentitySync";
+import { ProfileSettings } from "@/components/profile/ProfileSettings";
+import { ProfileSharing } from "@/components/profile/ProfileSharing";
 import { People } from "@/components/social/People";
 import { SocialMenus } from "@/components/social/SocialMenus";
 import { getAuthConfig } from "@/lib/auth/config";
@@ -102,6 +105,7 @@ async function AuthenticatedHome() {
         </>
       }
       session={<SessionMenu />}
+      reminder={<IdentitySync key={userId} />}
     >
       <Suspense fallback={<WorkspaceLoading />}>
         <Workspace data={data} companion={companion} userId={userId} />
@@ -123,6 +127,7 @@ function preloadHome(token: string) {
       { token },
     ),
     inbox: preloadQuery(api.directMessages.inbox, {}, { token }),
+    profile: fetchQuery(api.profiles.current, {}, { token }),
   };
 
   // A nested region may not render until another read resolves. Observe early
@@ -139,7 +144,17 @@ type HomeRegionProps = { data: HomeData; userId: string };
 type WorkspaceProps = HomeRegionProps & { companion: Doc<"companions"> };
 
 async function AccountDetails({ data, userId }: HomeRegionProps) {
-  return <AccountPanel preloaded={await data.payments} userId={userId} />;
+  const [payments, profile] = await Promise.all([data.payments, data.profile]);
+
+  return (
+    <>
+      <AccountPanel preloaded={payments} userId={userId} />
+      <div className="mt-6 space-y-5 border-t pt-5">
+        <ProfileSettings />
+        {profile?.username && <ProfileSharing username={profile.username} />}
+      </div>
+    </>
+  );
 }
 
 async function ActivityDetails({ data, userId }: HomeRegionProps) {

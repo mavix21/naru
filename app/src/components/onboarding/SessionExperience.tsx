@@ -8,6 +8,7 @@ import { useConvexAuth, useMutation, useQuery } from "convex/react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { IdentitySync } from "@/components/profile/IdentitySync";
 import { UsernameForm } from "@/components/social/UsernameForm";
 import { Button } from "@/components/ui/button";
 import {
@@ -129,7 +130,7 @@ function AuthenticatedExperience({
 
   if (screen === "create") return <Navigate to="/home" loading={loading} />;
 
-  if (!companion.paymentChoiceMade && !profile?.username)
+  if (profile?.onboardingStatus !== "complete" && !profile?.username)
     return (
       <Frame controls={<UserButton />}>
         <Scene>
@@ -163,12 +164,15 @@ export function SessionExperience({
 
   if (userId)
     return (
-      <AuthenticatedExperience
-        key={userId}
-        screen={screen}
-        userId={userId}
-        loading={loading}
-      />
+      <>
+        <IdentitySync key={`identity-${userId}`} />
+        <AuthenticatedExperience
+          key={userId}
+          screen={screen}
+          userId={userId}
+          loading={loading}
+        />
+      </>
     );
 
   if (screen === "create") return <Customize />;

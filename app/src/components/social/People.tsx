@@ -6,23 +6,21 @@ import { Menu } from "@base-ui/react/menu";
 import { Tabs } from "@base-ui/react/tabs";
 import { api } from "@naru/backend/api";
 import {
-  IconArrowLeft,
   IconCheck,
   IconDots,
   IconLoader2,
-  IconPencil,
   IconSearch,
   IconUserMinus,
   IconUsers,
   IconX,
 } from "@tabler/icons-react";
 import { useMutation, usePreloadedQuery, type Preloaded } from "convex/react";
+import Link from "next/link";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 
 import { PersonAvatar, type PersonIdentity } from "./Person";
-import { UsernameForm } from "./UsernameForm";
 
 function PeoplePerson({ person }: { person: PersonIdentity }) {
   return (
@@ -48,7 +46,6 @@ export function People({
   const act = useMutation(api.social.friendAction);
   const [username, setUsername] = useState("");
   const [found, setFound] = useState<PersonIdentity | null>();
-  const [editing, setEditing] = useState(false);
 
   const [tab, setTab] = useState<"requests" | "friends">(() =>
     data.incoming.length ? "requests" : "friends",
@@ -91,24 +88,19 @@ export function People({
     }
   }
 
-  if (!data.me || editing)
+  if (!data.me)
     return (
-      <div className="overflow-y-auto p-5 md:p-6">
-        {data.me && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="mb-4 -ml-2"
-            onClick={() => setEditing(false)}
-          >
-            <IconArrowLeft />
-            Back
-          </Button>
-        )}
-        <UsernameForm
-          initial={data.me ?? undefined}
-          onSaved={() => setEditing(false)}
-        />
+      <div className="space-y-3 overflow-y-auto p-5 md:p-6">
+        <h2 className="text-base font-medium">Meet your people.</h2>
+        <p className="text-xs leading-6 text-muted-foreground">
+          Choose your public username so friends can find you and your Naru.
+        </p>
+        <Link
+          href="/username"
+          className="inline-block text-sm font-medium underline underline-offset-4"
+        >
+          Choose username ↗
+        </Link>
       </div>
     );
 
@@ -406,16 +398,9 @@ export function People({
         <p className="truncate text-xs text-muted-foreground">
           @{data.me.username}
         </p>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label="Edit profile"
-          title="Edit profile"
-          disabled={busy}
-          onClick={() => setEditing(true)}
-        >
-          <IconPencil className="size-3.5 text-muted-foreground" />
-        </Button>
+        <Link href="/username" className="text-xs underline underline-offset-4">
+          Edit profile ↗
+        </Link>
       </div>
     </section>
   );

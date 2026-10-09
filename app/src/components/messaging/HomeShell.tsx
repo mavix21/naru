@@ -8,10 +8,12 @@ import { WorkspaceState } from "./navigation";
 export function HomeShell({
   tools,
   session,
+  reminder,
   children,
 }: {
   tools: ReactNode;
   session: ReactNode;
+  reminder?: ReactNode;
   children: ReactNode;
 }) {
   return (
@@ -41,6 +43,7 @@ export function HomeShell({
           </div>
         </header>
       </div>
+      {reminder}
       <div className="mx-auto flex min-h-0 w-full max-w-400 flex-1 md:border-x md:border-border/60">
         {children}
       </div>
