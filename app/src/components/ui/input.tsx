@@ -12,6 +12,9 @@ const inputVariants = cva(
           "h-9 rounded-3xl border-transparent bg-input/50 px-3 py-1 text-base md:text-sm",
         // Companion naming uses a larger, softer field.
         lg: "h-13 rounded-xl border-input bg-card px-4 text-base md:text-base",
+        // Money entry next to preset chips, with room for a currency suffix.
+        amount:
+          "h-11 rounded-2xl border-input bg-card pr-14 pl-4 text-base tabular-nums md:text-sm",
       },
     },
     defaultVariants: {

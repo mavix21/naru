@@ -36,6 +36,36 @@ export function SocialEvent({
       </article>
     );
 
+  if (event.kind === "tip_received" && event.tip)
+    return (
+      <article
+        aria-label="Received tip"
+        className="my-3 rounded-2xl border bg-card p-5 text-sm"
+      >
+        <p className="text-xs text-muted-foreground">
+          Tip from your public profile · confirmed
+        </p>
+        <p className="mt-2 text-2xl tabular-nums">
+          {event.tip.amount} {event.tip.asset}
+        </p>
+        <p className="mt-2 text-xs text-muted-foreground">
+          From wallet{" "}
+          <span className="font-mono text-foreground" title={event.tip.from}>
+            {event.tip.from.slice(0, 4)}…{event.tip.from.slice(-4)}
+          </span>{" "}
+          (not a verified Naru identity)
+        </p>
+        <a
+          className="mt-3 inline-block text-xs underline underline-offset-4"
+          href={`https://stellar.expert/explorer/testnet/tx/${event.tip.hash}`}
+          target="_blank"
+          rel="noreferrer"
+        >
+          View confirmed receipt ↗
+        </a>
+      </article>
+    );
+
   if (event.replyId) return <ReplyCard id={event.replyId} />;
 
   if (event.requestId)

@@ -25,6 +25,7 @@ import type * as social from "../social.js";
 import type * as socialShared from "../socialShared.js";
 import type * as splits from "../splits.js";
 import type * as sponsorship from "../sponsorship.js";
+import type * as tips from "../tips.js";
 import type * as validators from "../validators.js";
 
 import type {
@@ -51,6 +52,7 @@ declare const fullApi: ApiFromModules<{
   socialShared: typeof socialShared;
   splits: typeof splits;
   sponsorship: typeof sponsorship;
+  tips: typeof tips;
   validators: typeof validators;
 }>;
 

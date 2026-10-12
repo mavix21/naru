@@ -3,10 +3,16 @@ packages:
   - "backend"
   - "contracts"
 allowBuilds:
+  "@reown/appkit": false
+  "@stellar/stellar-sdk": false
+  blake-hash: false
   bufferutil: true
   esbuild: true
+  protobufjs: false
   secp256k1: true
+  tiny-secp256k1: false
   unrs-resolver: true
+  usb: false
   utf-8-validate: true
 minimumReleaseAgeExclude:
   - "@next/env@16.3.6"

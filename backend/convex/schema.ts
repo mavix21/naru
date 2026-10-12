@@ -31,6 +31,35 @@ export default defineSchema({
     .index("by_intent", ["id"])
     .index("by_state", ["state"])
     .index("by_account_kind", ["account", "kind", "created"]),
+  // Guest USDC tips: the payer's own G-account signs and funds a direct SAC
+  // transfer. `checkout` stores only a hash of the opaque browser capability.
+  tips: defineTable({
+    checkout: v.string(),
+    recipientProfileId: v.id("profiles"),
+    recipientUserId: v.string(),
+    recipientAccount: v.string(),
+    sender: v.string(),
+    network: v.string(),
+    token: v.string(),
+    amount: v.string(),
+    units: v.string(),
+    fee: v.string(),
+    envelope: v.string(),
+    hash: v.string(),
+    expiresAt: v.number(),
+    state: v.union(
+      v.literal("review"),
+      v.literal("pending"),
+      v.literal("confirmed"),
+      v.literal("failed"),
+    ),
+    signedEnvelope: v.optional(v.string()),
+    ledger: v.optional(v.number()),
+    error: v.optional(v.string()),
+    updatedAt: v.number(),
+  })
+    .index("by_checkout", ["checkout"])
+    .index("by_hash", ["hash"]),
   sponsorLimits: defineTable({
     bucket: v.string(),
     count: v.number(),
@@ -270,6 +299,15 @@ export default defineSchema({
             amount: v.string(),
             asset: transferAsset,
             hash: v.string(),
+          }),
+        ),
+        // A guest's wallet address is shown as payment evidence, not identity.
+        tip: v.optional(
+          v.object({
+            amount: v.string(),
+            asset: v.literal("USDC"),
+            hash: v.string(),
+            from: v.string(),
           }),
         ),
       }),

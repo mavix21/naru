@@ -15,8 +15,10 @@ import {
   canonicalProfileUrl,
   ProfileSharing,
 } from "@/components/profile/ProfileSharing";
+import { TipCheckout } from "@/components/tips/TipCheckout";
 import { accents } from "@/lib/companion-art";
 import { profilePath } from "@/lib/profile";
+import { TipService } from "@/lib/tips/server";
 import { cn } from "@/lib/utils";
 
 type Props = { params: Promise<{ handle: string }> };
@@ -90,6 +92,12 @@ async function PublicProfile({ params }: Props) {
     (option) => option.id === profile.companion.accent,
   )!;
 
+  // Server-side only: the page learns whether tips are possible, never the
+  // owner's payment record. A lookup failure keeps the profile public.
+  const receiving = await new TipService()
+    .available(profile.username)
+    .catch(() => null);
+
   return (
     <Frame
       className="max-w-6xl"
@@ -134,10 +142,23 @@ async function PublicProfile({ params }: Props) {
             </span>
           </p>
         </header>
-        <div className="mx-auto mt-10 grid max-w-4xl items-start gap-5 md:mt-12 md:grid-cols-[minmax(0,1fr)_19rem] md:gap-6">
+        <div className="mx-auto mt-10 grid max-w-4xl items-start gap-5 md:mt-12 md:grid-cols-[minmax(0,1fr)_20rem] md:gap-6">
+          <div className="min-w-0 md:col-start-2 md:row-start-1">
+            {receiving ? (
+              <TipCheckout
+                username={profile.username}
+                displayName={profile.displayName}
+              />
+            ) : (
+              <TipsUnavailable
+                displayName={profile.displayName}
+                reason={receiving === false ? "inactive" : "offline"}
+              />
+            )}
+          </div>
           <section
             aria-labelledby="about-heading"
-            className="min-w-0 rounded-3xl border bg-card p-6 md:p-8"
+            className="min-w-0 rounded-3xl border bg-card p-6 md:col-start-1 md:row-span-2 md:row-start-1 md:p-8"
           >
             <h2 id="about-heading" className="text-base font-medium">
               About me
@@ -149,7 +170,7 @@ async function PublicProfile({ params }: Props) {
           </section>
           <aside
             aria-labelledby="companion-heading"
-            className="overflow-hidden rounded-3xl border bg-card"
+            className="overflow-hidden rounded-3xl border bg-card md:col-start-2 md:row-start-2"
           >
             <div className={cn("flex justify-center py-3", accent.surface)}>
               <Image
@@ -177,15 +198,40 @@ async function PublicProfile({ params }: Props) {
             </div>
           </aside>
         </div>
-        <div className="mt-12 text-center">
-          <Link
-            href="/create"
-            className="inline-flex min-h-11 items-center gap-2 rounded-full border px-5 text-xs font-medium transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
-          >
-            Meet your own Naru <span aria-hidden="true">↗</span>
-          </Link>
-        </div>
       </article>
     </Frame>
+  );
+}
+
+function TipsUnavailable({
+  displayName,
+  reason,
+}: {
+  displayName: string;
+  reason: "inactive" | "offline";
+}) {
+  return (
+    <section
+      aria-labelledby="tip-heading"
+      className="rounded-3xl border border-dashed bg-card p-5 md:p-6"
+    >
+      <h2 id="tip-heading" className="text-base font-medium">
+        Tips aren’t available yet
+      </h2>
+      <p className="mt-2 text-xs leading-5 text-muted-foreground">
+        {reason === "inactive"
+          ? `${displayName} hasn’t activated a Naru payment account, so this profile can’t receive USDC tips yet.`
+          : "Tipping is temporarily unavailable. Please check back soon."}
+      </p>
+      {reason === "inactive" && (
+        <Link
+          href="/activate"
+          className="mt-4 inline-flex min-h-9 items-center gap-1 rounded-full border px-4 text-xs font-medium transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring"
+        >
+          Is this you? Activate payments
+          <span aria-hidden="true">→</span>
+        </Link>
+      )}
+    </section>
   );
 }
