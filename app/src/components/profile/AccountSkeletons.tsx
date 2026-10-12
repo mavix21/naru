@@ -65,3 +65,34 @@ export function ProfileFormSkeleton() {
     </div>
   );
 }
+
+export function UsernameFormSkeleton() {
+  return (
+    <div>
+      <output className="sr-only">Loading your profile…</output>
+      <div aria-hidden="true" className="space-y-5">
+        <div>
+          <div className="flex h-7 items-center">
+            <Skeleton className="h-6 w-56 max-w-full" />
+          </div>
+          <div className="mt-2 space-y-2">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-3/5" />
+          </div>
+        </div>
+        <div>
+          <div className="flex h-5 items-center">
+            <Skeleton className="h-4 w-20" />
+          </div>
+          <div className="mt-2 h-12 w-full overflow-hidden rounded-xl">
+            <Skeleton className="size-full" />
+          </div>
+          <Skeleton className="mt-2 h-3 w-4/5" />
+        </div>
+        <div className="h-9 w-32 overflow-hidden rounded-4xl">
+          <Skeleton className="size-full" />
+        </div>
+      </div>
+    </div>
+  );
+}

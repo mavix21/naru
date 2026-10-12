@@ -9,6 +9,7 @@ import Link from "next/link";
 import { UsernameForm } from "@/components/social/UsernameForm";
 import { profilePath } from "@/lib/profile";
 
+import { UsernameFormSkeleton } from "./AccountSkeletons";
 import { ProfileSettings } from "./ProfileSettings";
 
 export function UsernameCompletion({
@@ -22,7 +23,7 @@ export function UsernameCompletion({
   const profile = useQuery(api.profiles.current, isAuthenticated ? {} : "skip");
 
   if (!isAuthenticated || profile === undefined)
-    return <output>Loading your profile…</output>;
+    return <UsernameFormSkeleton />;
 
   return (
     <div className="space-y-8">

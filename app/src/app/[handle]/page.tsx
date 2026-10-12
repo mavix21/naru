@@ -16,6 +16,7 @@ import {
   ProfileSharing,
 } from "@/components/profile/ProfileSharing";
 import { TipCheckout } from "@/components/tips/TipCheckout";
+import { Skeleton } from "@/components/ui/skeleton";
 import { accents } from "@/lib/companion-art";
 import { profilePath } from "@/lib/profile";
 import { TipService } from "@/lib/tips/server";
@@ -68,15 +69,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default function Page(props: Props) {
   return (
-    <Suspense
-      fallback={
-        <Frame>
-          <output className="py-20 text-center text-sm text-muted-foreground">
-            Loading this profile…
-          </output>
-        </Frame>
-      }
-    >
+    <Suspense fallback={<PublicProfileSkeleton />}>
       <PublicProfile {...props} />
     </Suspense>
   );
@@ -105,20 +98,36 @@ async function PublicProfile({ params }: Props) {
     >
       <article className="flex-1 pb-12">
         <div
-          aria-hidden="true"
           className={cn(
             "relative h-36 overflow-hidden rounded-3xl md:h-48",
             accent.surface,
           )}
         >
           <div
+            aria-hidden="true"
             className={cn(
               "absolute -top-40 -left-12 size-96 rounded-full opacity-20 md:left-10",
               accent.swatch,
             )}
           />
-          <div className="absolute -right-16 -bottom-64 size-120 rounded-full border-[40px] border-white/40 md:right-10" />
-          <div className="absolute top-10 right-1/3 size-16 rounded-full border border-ring/15 md:size-24" />
+          <div
+            aria-hidden="true"
+            className="absolute -right-16 -bottom-64 size-120 rounded-full border-[40px] border-white/40 md:right-10"
+          />
+          <div
+            aria-hidden="true"
+            className="absolute top-10 right-1/3 size-16 rounded-full border border-ring/15 md:size-24"
+          />
+          {/* The companion perches on the cover so it is visible without scrolling. */}
+          <Image
+            src={accent.image}
+            alt={`${profile.companion.name}, the Naru bird`}
+            width={192}
+            height={192}
+            sizes="(min-width: 768px) 176px, 112px"
+            loading="eager"
+            className="absolute right-3 -bottom-2 size-28 object-contain md:right-12 md:size-44"
+          />
         </div>
         <header className="relative mx-auto -mt-12 flex max-w-xl flex-col items-center px-4 text-center">
           <ProfileAvatar
@@ -158,7 +167,7 @@ async function PublicProfile({ params }: Props) {
           </div>
           <section
             aria-labelledby="about-heading"
-            className="min-w-0 rounded-3xl border bg-card p-6 md:col-start-1 md:row-span-2 md:row-start-1 md:p-8"
+            className="min-w-0 rounded-3xl border bg-card p-6 md:col-start-1 md:row-start-1 md:p-8"
           >
             <h2 id="about-heading" className="text-base font-medium">
               About me
@@ -167,38 +176,85 @@ async function PublicProfile({ params }: Props) {
               {profile.bio ||
                 `A little corner of Naru, shared with ${profile.companion.name}.`}
             </p>
-          </section>
-          <aside
-            aria-labelledby="companion-heading"
-            className="overflow-hidden rounded-3xl border bg-card md:col-start-2 md:row-start-2"
-          >
-            <div className={cn("flex justify-center py-3", accent.surface)}>
-              <Image
-                src={accent.image}
-                alt={`${profile.companion.name}, the Naru bird`}
-                width={192}
-                height={192}
-                sizes="192px"
-                className="size-44 object-contain"
+            <div className="mt-6 flex items-center gap-3 border-t pt-5">
+              <span
+                aria-hidden="true"
+                className={cn("size-2 shrink-0 rounded-full", accent.swatch)}
               />
-            </div>
-            <div className="p-6">
-              <p className="text-xs text-muted-foreground">
-                My everyday companion
-              </p>
-              <h2
-                id="companion-heading"
-                className="mt-2 text-xl font-medium tracking-tight wrap-anywhere"
-              >
-                Meet {profile.companion.name}
-              </h2>
-              <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                A little company for life, and everything money.
+              <p className="min-w-0 text-sm text-muted-foreground">
+                <span className="font-medium wrap-anywhere text-foreground">
+                  {profile.companion.name}
+                </span>{" "}
+                is my everyday companion — a little company for life, and
+                everything money.
               </p>
             </div>
-          </aside>
+          </section>
         </div>
       </article>
+    </Frame>
+  );
+}
+
+function PublicProfileSkeleton() {
+  return (
+    <Frame
+      className="max-w-6xl"
+      controls={
+        <div className="h-10 w-34 overflow-hidden rounded-4xl">
+          <Skeleton className="size-full" />
+        </div>
+      }
+    >
+      <output className="sr-only">Loading this profile…</output>
+      <div aria-hidden="true" className="flex-1 pb-12">
+        <div className="h-36 overflow-hidden rounded-3xl md:h-48">
+          <Skeleton className="size-full" />
+        </div>
+        <div className="relative mx-auto -mt-12 flex max-w-xl flex-col items-center px-4">
+          <div className="size-24 rounded-full border-[5px] border-background bg-background">
+            <div className="size-full overflow-hidden rounded-full">
+              <Skeleton className="size-full" />
+            </div>
+          </div>
+          <div className="mt-5 flex h-9 items-center md:h-10">
+            <Skeleton className="h-7 w-48 md:h-8 md:w-60" />
+          </div>
+          <Skeleton className="mt-2 h-4 w-24" />
+          <div className="mt-4 h-7 w-44 overflow-hidden rounded-full">
+            <Skeleton className="size-full" />
+          </div>
+        </div>
+        <div className="mx-auto mt-10 grid max-w-4xl items-start gap-5 md:mt-12 md:grid-cols-[minmax(0,1fr)_20rem] md:gap-6">
+          <div className="rounded-3xl border bg-card p-5 md:col-start-2 md:row-start-1 md:p-6">
+            <Skeleton className="h-5 w-40" />
+            <Skeleton className="mt-2 h-3 w-full max-w-60" />
+            <div className="mt-5 grid grid-cols-4 gap-2">
+              {[0, 1, 2, 3].map((preset) => (
+                <Skeleton key={preset} className="h-11" />
+              ))}
+            </div>
+            <Skeleton className="mt-2 h-11" />
+            <div className="mt-4 h-11 overflow-hidden rounded-4xl">
+              <Skeleton className="size-full" />
+            </div>
+          </div>
+          <div className="rounded-3xl border bg-card p-6 md:col-start-1 md:row-start-1 md:p-8">
+            <Skeleton className="h-5 w-20" />
+            <div className="mt-5 space-y-3">
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-11/12" />
+              <Skeleton className="h-4 w-2/3" />
+            </div>
+            <div className="mt-6 flex items-center gap-3 border-t pt-5">
+              <div className="size-2 shrink-0 overflow-hidden rounded-full">
+                <Skeleton className="size-full" />
+              </div>
+              <Skeleton className="h-4 w-56 max-w-full" />
+            </div>
+          </div>
+        </div>
+      </div>
     </Frame>
   );
 }
