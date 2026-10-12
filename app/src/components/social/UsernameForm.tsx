@@ -5,7 +5,7 @@ import { useQuery } from "convex/react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
-import { syncProfile } from "@/app/username/actions";
+import { syncProfile } from "@/app/(workspace)/username/actions";
 import { Button } from "@/components/ui/button";
 
 export function UsernameForm({ onSaved }: { onSaved?: () => void }) {

@@ -121,9 +121,10 @@ function AuthenticatedExperience({
     return loading;
 
   if (!companion) {
-    if (screen === "create") return <Customize signedIn />;
-
+    // Home sends companion-less sessions here, including a pending save.
     if (draft.saveRequested && validName(draft.name)) return <SaveCompanion />;
+
+    if (screen === "create") return <Customize signedIn />;
 
     return <Navigate to="/create" loading={loading} />;
   }

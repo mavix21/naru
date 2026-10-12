@@ -28,7 +28,7 @@ export function UsernameCompletion({
     <div className="space-y-8">
       {profile?.username ? (
         <div className="space-y-3">
-          <h1 className="text-3xl tracking-tight">Your link is ready.</h1>
+          <h2 className="text-2xl tracking-tight">Your link is ready.</h2>
           <Link
             href={profilePath(profile.username)}
             className="text-sm font-medium underline underline-offset-4"

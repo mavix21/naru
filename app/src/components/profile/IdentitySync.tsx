@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 
-import { syncProfile } from "@/app/username/actions";
+import { syncProfile } from "@/app/(workspace)/username/actions";
 
 export function IdentitySync() {
   const { isAuthenticated } = useConvexAuth();
