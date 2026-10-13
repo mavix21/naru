@@ -38,7 +38,6 @@ function Navigate({ to, loading }: { to: string; loading: ReactNode }) {
 function SaveCompanion() {
   const draft = useCompanionDraft();
   const save = useMutation(api.companions.save);
-  const router = useRouter();
   const requested = useRef(false);
   const [failed, setFailed] = useState(false);
 
@@ -47,11 +46,12 @@ function SaveCompanion() {
 
     try {
       await save({ name: draft.name, accent: draft.accent });
-      router.replace("/activate");
+      // The live companion query owns the next screen. Navigating here races
+      // its update and can send the session through conflicting redirects.
     } catch {
       setFailed(true);
     }
-  }, [draft.name, draft.accent, router, save]);
+  }, [draft.name, draft.accent, save]);
 
   useEffect(() => {
     if (requested.current) return;
@@ -129,7 +129,15 @@ function AuthenticatedExperience({
     return <Navigate to="/create" loading={loading} />;
   }
 
-  if (screen === "create") return <Navigate to="/home" loading={loading} />;
+  // A newly saved companion must go forward to onboarding, not back to a
+  // cached home snapshot that may still redirect companion-less sessions here.
+  if (screen === "create")
+    return (
+      <Navigate
+        to={companion.paymentChoiceMade ? "/home" : "/activate"}
+        loading={loading}
+      />
+    );
 
   if (profile?.onboardingStatus !== "complete" && !profile?.username)
     return (
