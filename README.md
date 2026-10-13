@@ -14,6 +14,11 @@ otras personas.**
 [Video pitch](https://youtu.be/3jpPjH41-b4?si=T9mQOICz7EKsTd2F) ·
 [Video demo](https://youtu.be/T3Sl3tSe1pg?si=eWVtPePxf22GjoBg)
 
+**Para el jurado:** [Funciones](#funciones-disponibles) ·
+[Recorrido](#prototipo-recorrido-para-el-jurado) ·
+[Transacciones](#evidencia-en-testnet) ·
+[Contratos](#contratos-y-código-verificable)
+
 ## ¿Qué problema resuelve?
 
 Las personas piensan en objetivos: cobrar por su trabajo, organizar sus gastos,
@@ -44,17 +49,35 @@ o PIN), sin conectar una wallet externa ni gestionar una frase semilla. Naru
 patrocina las comisiones de red con un límite de **0,5 XLM por transacción**.
 
 El prototipo usa **Stellar Testnet**: activación de cuentas, fondeo, transferencias
-XLM/USDC, swaps XLM → USDC y publicación de reembolsos con
-[NaruSplit](contracts/naru-split/README.md). Los agentes preparan las acciones;
-el usuario revisa y autoriza. Cobros por servicios, tareas remuneradas y otros
-acuerdos programables forman parte de la visión del producto.
+XLM/USDC, swaps XLM → USDC, publicación y pago de reembolsos con
+[NaruSplit](contracts/naru-split/README.md), y propinas USDC desde wallets externas.
+Los agentes preparan las acciones; el usuario revisa y autoriza. El patrocinio
+aplica a las operaciones con passkey; **quien envía una propina paga su comisión**.
+
+## Funciones disponibles
+
+| Función                | Qué puede revisar el jurado                                                                                                                                                    |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Compañero con IA**   | Nombre y color personalizables; conversación persistente que prepara tarjetas de acción, sin firmar ni gastar por el usuario.                                                  |
+| **Cuenta con passkey** | Dirección copiable, saldos XLM/USDC y recargas de **1.000 XLM de prueba** desde Account o pidiéndolas en el chat.                                                              |
+| **Swaps y envíos**     | XLM → USDC por monto a gastar **o USDC a recibir**; envíos XLM/USDC a amigos seleccionados con `@`. Si falta USDC, swap y envío se autorizan por separado.                     |
+| **Amigos y mensajes**  | Invitaciones, DMs con búsqueda y no leídos, notificaciones de solicitudes y pagos; el chat privado con Naru no se comparte.                                                    |
+| **Gastos compartidos** | Splits XLM con solicitudes y respuestas revisables; reembolsos USDC para **2–13 personas**, publicados en Soroban y pagables desde el DM con passkey.                          |
+| **Perfil y propinas**  | Página pública `/@username`, nombre, bio, enlace y QR. Invitados pueden enviar **0,1–500 USDC** con una wallet Stellar, sin cuenta Naru ni amistad.                            |
+| **Metas de apoyo**     | Una meta pública en USDC, creada en el perfil o redactada con IA y publicada tras confirmación. Solo propinas confirmadas cuentan para el progreso; permite editar y archivar. |
+
+**Alcance:** todo es dinero de prueba. Las metas son registros en Convex, **no
+escrow**: las propinas llegan directamente al destinatario, sin bloquear fondos
+ni prometer reembolsos. El título y objetivo se fijan tras la primera contribución.
+La cancelación USDC existe en el contrato, pero aún no en la interfaz. Cobros por
+servicios, tareas remuneradas y pagos programados siguen siendo visión de producto.
 
 ## Prototipo: recorrido para el jurado
 
 1. **Crea tu Naru:** elige nombre y color, y regístrate para guardarlo.
-2. **Activa los pagos:** crea una passkey y usa **Account → Add test XLM** para
-   recibir 5 XLM de prueba.
-3. **Conecta con otra persona:** en **People**, elige tu nombre de usuario,
+2. **Activa los pagos:** crea una passkey y usa **Account → Wallet → Get 1,000 test XLM**
+   (o pide «Dame XLM de prueba») para recibir 1.000 XLM de prueba.
+3. **Conecta con otra persona:** confirma tu username; en **People**,
    busca el suyo y envía una invitación. La otra persona debe aceptarla.
 4. **Conversa:** consulta tu saldo, pide «Cambia 1 XLM por USDC» o
    «Envía 1 USDC a @ana». Selecciona a la persona desde el menú de `@`.
@@ -63,24 +86,81 @@ acuerdos programables forman parte de la visión del producto.
 6. **Divide un gasto:** con dos amigos activados, pide «I paid 12 USDC; split it
    between @ana, @josh, and me». Revisa las partes y pulsa **Publish requests with
    passkey**. Cada amigo recibe una solicitud de 4 USDC en su DM. Publicar no
-   transfiere fondos; estas tarjetas USDC son de solo lectura por ahora.
+   transfiere fondos. En el DM, cada amigo pulsa **Pay my share**, revisa y
+   autoriza con su propia passkey; el pago va directamente al organizador y la
+   tarjeta muestra el recibo. Si falta USDC, usa **Get USDC** y vuelve tras el swap.
 
 Para probar ambos lados, usa cuentas en perfiles de navegador distintos.
+
+**También puedes revisar sin añadir amigos:**
+
+- **Perfil y meta:** abre **Account → Edit profile**, edita la bio y publica un
+  **Support goal**, o pide «Ayúdame a crear una meta de 100 USDC para mi proyecto»
+  y confirma la tarjeta. Comparte `/@tu_username` con su enlace o QR.
+- **Propina de un invitado:** abre ese perfil sin sesión Naru, conecta una wallet
+  como Freighter en **Testnet**, con USDC oficial y XLM para la comisión, y envía
+  una propina. Si falta la trustline, el checkout ofrece añadirla; esto **no compra
+  USDC**. Revisa destinatario, monto y comisión antes de firmar en la wallet.
+- **Seguimiento:** comprueba el recibo en Stellar, la notificación del
+  destinatario y el progreso de la meta. Recargar la página recupera una propina
+  pendiente sin crear un segundo pago.
 
 ### Evidencia en Testnet
 
 Validaciones del **4–5 de octubre de 2026**, mediante la app y passkeys virtuales
 de Chromium con autorización verificada en cadena:
 
-| Flujo         | Resultado                                           | Recibo                                                                                                                         |
-| ------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| Swap          | 1 XLM → 0,1057259 USDC                              | [Ver transacción](https://stellar.expert/explorer/testnet/tx/173a183f11ed5d7ea05babcacf096c6738111aff717dd0a7249045ad11e361ff) |
-| Transferencia | 1 USDC entre amigos                                 | [Ver transacción](https://stellar.expert/explorer/testnet/tx/bbd304a78c00956c79a9706f2f3f2e00b0bbdcd7130c18216841b8f5c09f88ea) |
-| Reembolso     | 12 USDC entre tres personas; dos solicitudes por DM | [Ver transacción](https://stellar.expert/explorer/testnet/tx/65bc68f184aea68be781a3bc1aad8e6137e140bd6d3c64d0bc3999a6c1e18a93) |
+| Flujo                    | Resultado                                                                            | Recibo                                                                                                                             |
+| ------------------------ | ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Swap                     | 1 XLM → 0,1057259 USDC                                                               | [`173a183f…11e361ff`](https://stellar.expert/explorer/testnet/tx/173a183f11ed5d7ea05babcacf096c6738111aff717dd0a7249045ad11e361ff) |
+| Transferencia            | 1 USDC entre amigos                                                                  | [`bbd304a7…c09f88ea`](https://stellar.expert/explorer/testnet/tx/bbd304a78c00956c79a9706f2f3f2e00b0bbdcd7130c18216841b8f5c09f88ea) |
+| Publicación de reembolso | 12 USDC entre tres personas; dos solicitudes por DM; comisión real **0,1846935 XLM** | [`65bc68f1…c1e18a93`](https://stellar.expert/explorer/testnet/tx/65bc68f184aea68be781a3bc1aad8e6137e140bd6d3c64d0bc3999a6c1e18a93) |
 
 Los reintentos conservan el mismo hash y evitan duplicar operaciones o mensajes.
 Los detalles del contrato, costes y mantenimiento están en el
 [README de NaruSplit](contracts/naru-split/README.md).
+
+Estos recibos documentan los flujos de esa fecha, **no el pago posterior de las
+partes ni las propinas/metas añadidas después**. Para esos flujos, la app genera
+el recibo al confirmar. Testnet puede reiniciarse y el historial RPC caduca;
+los hashes completos y ledgers de NaruSplit están en el
+[registro de despliegue](contracts/naru-split/deployments/testnet.json).
+
+### Contratos y código verificable
+
+**NaruSplit v0.2.0 · Stellar Testnet** — contrato propio para reembolsos USDC:
+
+[`CCGF3HL4GCL37O2ZCCU6ZJRU5EEUGFRMZEV46BHKF5767ZYPY4BM6R76`](https://stellar.expert/explorer/testnet/contract/CCGF3HL4GCL37O2ZCCU6ZJRU5EEUGFRMZEV46BHKF5767ZYPY4BM6R76)
+
+| Evidencia            | Referencia                                                                                                                                                                               |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| WASM SHA-256         | `ea4d32725fdfe63004095990dbe05ab13f84b24328891a04412f256a9b2fe0d8`                                                                                                                       |
+| Upload del WASM      | [`0af4f877…4466e694`](https://stellar.expert/explorer/testnet/tx/0af4f8772e7a453e740c30cce3bf13759a34a2d61a9fd15dbed573bc4466e694)                                                       |
+| Despliegue           | [`365eee5d…2b7f96dd`](https://stellar.expert/explorer/testnet/tx/365eee5d8e8bb9262afb43edda666e3de3add7b7aa6db6c188b1ea912b7f96dd)                                                       |
+| Código y verificador | [Rust](contracts/naru-split/src/lib.rs) · [Verificación read-only](contracts/naru-split/scripts/verify-testnet.mjs) · [Registro completo](contracts/naru-split/deployments/testnet.json) |
+
+`create` registra términos sin mover fondos; `pay` transfiere una parte al
+organizador con autorización del participante y evita cobrarla dos veces.
+Importes enteros con 7 decimales y redondeo determinista conservan el total.
+Nombres, descripciones y conversaciones permanecen fuera de cadena.
+
+<details>
+<summary>Contratos de integración y activos fijados en Testnet</summary>
+
+| Integración                           | Dirección verificable                                                                                                                                                   |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| USDC oficial · Stellar Asset Contract | [`CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA`](https://stellar.expert/explorer/testnet/contract/CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA) |
+| Emisor USDC                           | [`GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5`](https://stellar.expert/explorer/testnet/account/GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5)  |
+| Soroswap router                       | [`CCJUD55AG6W5HAI5LRVNKAE5WDP5XGZBUDS5WNTIVDU7O264UZZE7BRD`](https://stellar.expert/explorer/testnet/contract/CCJUD55AG6W5HAI5LRVNKAE5WDP5XGZBUDS5WNTIVDU7O264UZZE7BRD) |
+| Verificador WebAuthn                  | [`CC7EKIHQP3TN4CARQDND6CEOY2UXLWWC2X5GHTD5NLAT7BG5GPZIOM3F`](https://stellar.expert/explorer/testnet/contract/CC7EKIHQP3TN4CARQDND6CEOY2UXLWWC2X5GHTD5NLAT7BG5GPZIOM3F) |
+
+Cada usuario tiene su propia cuenta inteligente: **Account → Wallet** muestra
+su dirección. Los hashes WASM de cuenta/verificador están en
+[`smart-account/shared.ts`](app/src/lib/smart-account/shared.ts); router,
+factory y pool en [`swaps/shared.ts`](app/src/lib/swaps/shared.ts); activos y
+NaruSplit en [`money.ts`](backend/convex/money.ts).
+
+</details>
 
 ## Tecnología
 
@@ -89,6 +169,7 @@ Los detalles del contrato, costes y mantenimiento están en el
 - **AI SDK + Vercel AI Gateway:** interpretación de mensajes y propuestas de acción.
 - **Stellar Smart Account Kit y Soroban:** cuentas y pagos con passkeys.
 - **Soroswap:** swaps XLM → USDC con cotizaciones verificadas en Testnet.
+- **Stellar Wallets Kit:** conexión y firma de wallets externas para propinas.
 
 ## Ejecutar en local
 
@@ -168,11 +249,20 @@ mercado, en `app/src/lib/swaps/shared.ts`.
 
 ### Perfiles públicos y configuración de Clerk
 
-Cada username de Naru tiene automáticamente un perfil anónimo en `/@username`.
-**Account → Your public profile** permite editar el nombre humano y la bio, ver
-el perfil y compartir su URL o QR. El nombre del compañero sigue en **Companion**.
+Cada username de Naru tiene automáticamente un perfil accesible sin sesión en
+`/@username`. **Account → Edit profile** permite editar el nombre humano, la bio
+y la meta de apoyo; **View public profile** abre la página para compartir URL o
+QR y recibir propinas si los pagos están activados. El nombre del compañero sigue
+en **Companion**.
 Las cuentas existentes sin username conservan chats y pagos; el recordatorio
 persistente lleva a `/username`.
+
+Para añadir WalletConnect al checkout público, configura la variable opcional
+`NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` con un proyecto de Reown. Las wallets de
+extensión/web no necesitan esa variable.
+
+<details>
+<summary>Configuración de Clerk y validación del despliegue</summary>
 
 Configuración **manual** necesaria en cada instancia de Clerk (no aplicada por
 el código):
@@ -218,6 +308,8 @@ interrupción, nombre corregido conservado al volver a entrar, perfil en incógn
 404 desconocido, compartir/copiar y escanear QR en móvil. Los tests automatizados
 de perfiles cubren aislamiento público, autorización, colisiones concurrentes,
 reintentos, nombres y compartir; no sustituyen el login real con Google.
+
+</details>
 
 ### Comprobaciones
 

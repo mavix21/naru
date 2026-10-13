@@ -9,8 +9,10 @@ Naru's existing DM. Publishing records the terms—it never moves anyone's funds
 In Naru, add two friends with activated accounts and ask:
 **“I paid 12 USDC; split it between @ana, @josh, and me.”** Review the three
 4-USDC shares and choose **Publish requests with passkey**. Each friend receives
-one read-only request card. Payment and cancellation exist in the contract;
-their app integration is still pending.
+one request card. In the DM, choose **Pay my share**, review, and authorize with
+the participant's passkey; payment goes directly to the organizer. If USDC is
+missing, **Get USDC** opens a separate swap review before returning to pay.
+Cancellation exists in the contract; its app integration is still pending.
 
 **Verified on Testnet, October 5, 2026:** the three-person flow published
 successfully, delivered both requests, and recovered an interrupted response
