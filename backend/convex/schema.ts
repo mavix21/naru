@@ -53,6 +53,9 @@ export default defineSchema({
       v.literal("confirmed"),
       v.literal("failed"),
     ),
+    // Bound server-side when the review is created; absent for legacy tips
+    // and for profiles without an active goal at that moment.
+    goalId: v.optional(v.id("supportGoals")),
     signedEnvelope: v.optional(v.string()),
     ledger: v.optional(v.number()),
     error: v.optional(v.string()),
@@ -60,6 +63,31 @@ export default defineSchema({
   })
     .index("by_checkout", ["checkout"])
     .index("by_hash", ["hash"]),
+  // Off-chain presentation of one optional public goal. Funds always go
+  // directly to the owner; `raisedUnits` counts only verified tips bound to
+  // this goal, incremented once in the transaction that confirms each tip.
+  supportGoals: defineTable({
+    profileId: v.id("profiles"),
+    clerkUserId: v.string(),
+    title: v.string(),
+    description: v.string(),
+    targetUnits: v.string(),
+    raisedUnits: v.string(),
+    contributions: v.number(),
+    state: v.union(
+      v.literal("draft"),
+      v.literal("active"),
+      v.literal("archived"),
+      v.literal("discarded"),
+    ),
+    source: v.union(v.literal("owner"), v.literal("naru")),
+    messageId: v.optional(v.string()),
+    publishedAt: v.optional(v.number()),
+    archivedAt: v.optional(v.number()),
+    updatedAt: v.number(),
+  })
+    .index("by_profile_state", ["profileId", "state"])
+    .index("by_turn", ["clerkUserId", "messageId"]),
   sponsorLimits: defineTable({
     bucket: v.string(),
     count: v.number(),
@@ -308,8 +336,10 @@ export default defineSchema({
             asset: v.literal("USDC"),
             hash: v.string(),
             from: v.string(),
+            goal: v.optional(v.string()),
           }),
         ),
+        goalId: v.optional(v.id("supportGoals")),
       }),
     ),
   })

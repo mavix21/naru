@@ -4,6 +4,7 @@ import { cacheLife } from "next/cache";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
+import { GoalSettings } from "@/components/goals/GoalSettings";
 import { AccountFrame } from "@/components/profile/AccountFrame";
 import { ProfileFormSkeleton } from "@/components/profile/AccountSkeletons";
 import { PreloadedProfileSettings } from "@/components/profile/ProfileSettings";
@@ -17,6 +18,9 @@ export default function Page() {
         <Suspense fallback={<ProfileFormSkeleton />}>
           <Editor />
         </Suspense>
+      </div>
+      <div className="mt-5 max-w-xl rounded-3xl border bg-card p-6 md:p-8">
+        <GoalSettings />
       </div>
     </AccountFrame>
   );

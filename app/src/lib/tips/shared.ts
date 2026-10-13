@@ -14,6 +14,18 @@ export const TIP = {
 
 export const checkoutId = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
 
+// Public goal amounts only; the server decides which goal a tip is bound to.
+export const tipGoalSchema = z.object({
+  title: z.string(),
+  description: z.string(),
+  target: z.string(),
+  raised: z.string(),
+  percent: z.number(),
+  active: z.boolean(),
+});
+
+export type TipGoal = z.infer<typeof tipGoalSchema>;
+
 export const tipReviewSchema = z.object({
   checkout: checkoutId,
   recipient: z.object({
@@ -31,6 +43,7 @@ export const tipReviewSchema = z.object({
   xdr: z.string(),
   hash: z.string(),
   expiresAt: z.number(),
+  goal: z.object({ title: z.string() }).nullable(),
 });
 
 export type TipReview = z.infer<typeof tipReviewSchema>;
@@ -46,6 +59,7 @@ export const tipStatusSchema = z.object({
   ledger: z.number().nullable(),
   error: z.string().nullable(),
   expiresAt: z.number(),
+  goal: tipGoalSchema.nullable(),
 });
 
 export type TipStatus = z.infer<typeof tipStatusSchema>;

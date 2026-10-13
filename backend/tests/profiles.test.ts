@@ -54,6 +54,7 @@ describe("authoritative public profile identity", () => {
       displayName: "alice Google",
       bio: "",
       companion: { name: "Naru", accent: "sky" },
+      goal: null,
     });
     expect(
       await t.query(api.profiles.publicByUsername, { username: "unknown" }),
@@ -216,6 +217,7 @@ describe("authoritative public profile identity", () => {
       displayName: "Chosen name",
       bio: "Hello <script>alert(1)</script>",
       companion: { name: "Pip", accent: "coral" },
+      goal: null,
     });
     expect(JSON.stringify(profile)).not.toMatch(
       /clerkUserId|alice"|_id|preferredGreeting|SECRET|private@example.com|paymentChoiceMade|createdAt/,

@@ -429,7 +429,7 @@ export class TipService {
     // Leave time to submit inside the transaction's own time bounds.
     const expiresAt = maxTime * 1000 - 30_000;
 
-    await fetchMutation(api.tips.create, {
+    const { goal } = await fetchMutation(api.tips.create, {
       key: this.key,
       checkout: digest(checkout),
       username: recipient.username,
@@ -460,6 +460,7 @@ export class TipService {
       xdr: prepared.toXDR(),
       hash,
       expiresAt,
+      goal,
     };
   }
 
@@ -584,8 +585,18 @@ export class TipService {
       }
     }
 
+    // Progress is read from Naru's verified records, never a wallet balance.
+    const goal =
+      tip.state === "failed"
+        ? null
+        : await fetchQuery(api.tips.goal, {
+            key: this.key,
+            checkout: digest(checkout),
+          }).catch(() => null);
+
     return {
       checkout,
+      goal,
       state: tip.state,
       amount: tip.amount,
       sender: tip.sender,

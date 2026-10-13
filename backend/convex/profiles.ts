@@ -2,6 +2,7 @@ import { ConvexError, v } from "convex/values";
 
 import { mutation, query, type QueryCtx } from "./_generated/server";
 import { requireServer } from "./access";
+import { activeGoal, publicGoal, publicGoalValidator } from "./goals";
 import {
   cleanBio,
   cleanDisplayName,
@@ -96,6 +97,7 @@ export const publicByUsername = query({
           v.literal("sunshine"),
         ),
       }),
+      goal: v.union(v.null(), publicGoalValidator),
     }),
   ),
   handler: async (ctx, args) => {
@@ -110,12 +112,15 @@ export const publicByUsername = query({
 
     if (!profile) return null;
 
-    const companion = await ctx.db
-      .query("companions")
-      .withIndex("by_clerk_user", (q) =>
-        q.eq("clerkUserId", profile.clerkUserId),
-      )
-      .unique();
+    const [companion, goal] = await Promise.all([
+      ctx.db
+        .query("companions")
+        .withIndex("by_clerk_user", (q) =>
+          q.eq("clerkUserId", profile.clerkUserId),
+        )
+        .unique(),
+      activeGoal(ctx, profile._id),
+    ]);
 
     return {
       username: profile.username!,
@@ -125,6 +130,7 @@ export const publicByUsername = query({
         name: companion?.name ?? "Naru",
         accent: companion?.accent ?? ("sky" as const),
       },
+      goal: goal && publicGoal(goal),
     };
   },
 });

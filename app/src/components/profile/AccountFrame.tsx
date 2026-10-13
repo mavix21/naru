@@ -23,7 +23,7 @@ const sections = {
   profile: {
     label: "Profile",
     title: "Edit profile",
-    description: "Your name and bio appear on your public page.",
+    description: "Your name, bio and support goal appear on your public page.",
     href: "/account/profile",
     icon: IconPencil,
   },

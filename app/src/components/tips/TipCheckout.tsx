@@ -7,6 +7,8 @@ import {
   IconLoader2,
   IconWallet,
 } from "@tabler/icons-react";
+import Image from "next/image";
+import { useRouter } from "next/navigation";
 import {
   useCallback,
   useEffect,
@@ -17,8 +19,10 @@ import {
 } from "react";
 import { z } from "zod";
 
+import { GoalProgress } from "@/components/goals/GoalProgress";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { accents, type CompanionSettings } from "@/lib/companion-art";
 import { parseAmount, TESTNET_ASSETS } from "@/lib/money";
 import {
   shortAddress,
@@ -107,9 +111,11 @@ function validAmount(value: string) {
 export function TipCheckout({
   username,
   displayName,
+  companion,
 }: {
   username: string;
   displayName: string;
+  companion: CompanionSettings;
 }) {
   const storageKey = `naru:tip:${username}`;
   const [amount, setAmount] = useState<string>(TIP.presets[1]);
@@ -259,6 +265,20 @@ export function TipCheckout({
 
     return () => clearInterval(timer);
   }, [go, pendingCheckout]);
+
+  // Refresh the server-rendered goal once a goal contribution is confirmed.
+  const router = useRouter();
+
+  const confirmedGoal =
+    step.kind === "status" &&
+    step.status.state === "confirmed" &&
+    step.status.goal
+      ? step.status.checkout
+      : undefined;
+
+  useEffect(() => {
+    if (confirmedGoal) router.refresh();
+  }, [confirmedGoal, router]);
 
   // Expire the review exactly when the server would refuse it.
   const reviewExpiry =
@@ -488,6 +508,7 @@ export function TipCheckout({
         <TipResult
           status={step.status}
           displayName={displayName}
+          companion={companion}
           onDone={startOver}
         />
       ) : step.kind === "trustline" ? (
@@ -784,6 +805,14 @@ function TipSummary({
             {shortAddress(review.sender)}
           </span>
         </Row>
+        {review.goal && (
+          <Row label="Goal">
+            <span className="wrap-anywhere">{review.goal.title}</span>
+            <span className="block text-muted-foreground">
+              counted once confirmed
+            </span>
+          </Row>
+        )}
         <Row label="Network">{review.network}</Row>
         <Row label="Asset">
           USDC{" "}
@@ -830,12 +859,25 @@ function TipSummary({
 function TipResult({
   status,
   displayName,
+  companion,
   onDone,
 }: {
   status: TipStatus;
   displayName: string;
+  companion: CompanionSettings;
   onDone: () => void;
 }) {
+  if (status.state === "confirmed" && status.goal)
+    return (
+      <GoalThanks
+        status={status}
+        goal={status.goal}
+        displayName={displayName}
+        companion={companion}
+        onDone={onDone}
+      />
+    );
+
   if (status.state === "confirmed")
     return (
       <div className="text-center" aria-live="polite">
@@ -911,6 +953,86 @@ function TipResult({
       </p>
       <Button type="button" className="mt-5 h-10 w-full" onClick={onDone}>
         Start a new tip
+      </Button>
+    </div>
+  );
+}
+
+// Shown only after the server verified the transfer. The recipient's own
+// Naru does a single hop (skipped with reduced motion); no confetti or sound.
+function GoalThanks({
+  status,
+  goal,
+  displayName,
+  companion,
+  onDone,
+}: {
+  status: TipStatus;
+  goal: NonNullable<TipStatus["goal"]>;
+  displayName: string;
+  companion: CompanionSettings;
+  onDone: () => void;
+}) {
+  const accent =
+    accents.find((option) => option.id === companion.accent) ?? accents[0];
+
+  return (
+    <div className="text-center" aria-live="polite">
+      <div
+        className={cn(
+          "mx-auto flex size-20 items-end justify-center overflow-hidden rounded-full",
+          accent.surface,
+        )}
+      >
+        <Image
+          src={accent.image}
+          alt=""
+          width={80}
+          height={80}
+          data-delight="true"
+          className="naru-presence size-18 object-contain"
+        />
+      </div>
+      <h2 id="tip-heading" className="mt-4 text-lg font-medium">
+        Thanks for supporting {displayName}!
+      </h2>
+      <p className="mt-1 text-xs text-muted-foreground">
+        {companion.name} is cheering · {status.amount} USDC confirmed on Stellar
+        Testnet
+      </p>
+      <div className="mt-5 rounded-2xl bg-muted/50 p-4 text-left">
+        <p className="text-xs font-medium wrap-anywhere">
+          {goal.title}
+          {!goal.active && (
+            <span className="font-normal text-muted-foreground">
+              {" "}
+              · ended, still counted
+            </span>
+          )}
+        </p>
+        <GoalProgress goal={goal} swatch={accent.swatch} className="mt-2" />
+      </div>
+      <dl className="mt-3 divide-y text-left text-xs">
+        <Row label="From">
+          <span className="font-mono">{shortAddress(status.sender)}</span>
+        </Row>
+        <Row label="Network fee">up to {status.fee} XLM</Row>
+      </dl>
+      <a
+        href={explorer(status.hash)}
+        target="_blank"
+        rel="noreferrer"
+        className="mt-3 inline-flex items-center gap-1 text-xs underline underline-offset-4"
+      >
+        View receipt <IconExternalLink className="size-3" />
+      </a>
+      <Button
+        type="button"
+        variant="outline"
+        className="mt-5 h-10 w-full"
+        onClick={onDone}
+      >
+        Send another tip
       </Button>
     </div>
   );

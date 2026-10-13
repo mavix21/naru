@@ -9,6 +9,7 @@ import { notFound, permanentRedirect } from "next/navigation";
 import { connection } from "next/server";
 import { cache, Suspense } from "react";
 
+import { SupportGoal } from "@/components/goals/SupportGoal";
 import { Frame } from "@/components/onboarding/Frame";
 import { ProfileAvatar } from "@/components/profile/ProfileAvatar";
 import {
@@ -152,11 +153,19 @@ async function PublicProfile({ params }: Props) {
           </p>
         </header>
         <div className="mx-auto mt-10 grid max-w-4xl items-start gap-5 md:mt-12 md:grid-cols-[minmax(0,1fr)_20rem] md:gap-6">
-          <div className="min-w-0 md:col-start-2 md:row-start-1">
+          <div className="min-w-0 space-y-5 md:col-start-2 md:row-start-1">
+            {profile.goal && (
+              <SupportGoal
+                goal={profile.goal}
+                displayName={profile.displayName}
+                swatch={accent.swatch}
+              />
+            )}
             {receiving ? (
               <TipCheckout
                 username={profile.username}
                 displayName={profile.displayName}
+                companion={profile.companion}
               />
             ) : (
               <TipsUnavailable

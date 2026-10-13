@@ -494,5 +494,48 @@ export function moneyTools(
         };
       },
     }),
+    draftSupportGoal: tool({
+      description:
+        "Draft ONE optional public support goal for the user's own profile when they ask for help creating or wording one: a short title, a one-sentence description and a positive USDC target. This only saves a private draft card; it never publishes. The user must review, edit and confirm Publish on the card. Goals are off-chain labels on the public tip page: tips still go directly to the user, nothing is escrowed or refunded, and the goal does not restrict how funds are used. Ask for the target if the user gave none; never invent one.",
+      inputSchema: z
+        .object({
+          title: z.string().min(1).max(60),
+          description: z.string().max(200),
+          target: z
+            .string()
+            .max(40)
+            .describe("Positive USDC amount, digits only, e.g. '250'."),
+        })
+        .strict(),
+      execute: async (terms) => {
+        try {
+          const goalId = await fetchMutation(
+            api.goals.draftFromChat,
+            { key: serverKey(), messageId, ...terms },
+            { token: await getToken() },
+          );
+
+          return {
+            goalId,
+            status: "draft",
+            instruction:
+              "Briefly invite the user to review the goal draft card. It is NOT published. Do not repeat its fields or print the goalId.",
+          };
+        } catch (error) {
+          const detail =
+            error instanceof ConvexError
+              ? z.string().max(400).safeParse(error.data)
+              : undefined;
+
+          return {
+            error: detail?.success
+              ? detail.data
+              : "The goal draft couldn’t be prepared. Please try again shortly.",
+            instruction:
+              "Briefly explain the error. Do not claim a goal draft exists or was published.",
+          };
+        }
+      },
+    }),
   };
 }

@@ -12,6 +12,7 @@ import type * as access from "../access.js";
 import type * as companions from "../companions.js";
 import type * as conversations from "../conversations.js";
 import type * as directMessages from "../directMessages.js";
+import type * as goals from "../goals.js";
 import type * as migrations from "../migrations.js";
 import type * as money from "../money.js";
 import type * as notifications from "../notifications.js";
@@ -39,6 +40,7 @@ declare const fullApi: ApiFromModules<{
   companions: typeof companions;
   conversations: typeof conversations;
   directMessages: typeof directMessages;
+  goals: typeof goals;
   migrations: typeof migrations;
   money: typeof money;
   notifications: typeof notifications;

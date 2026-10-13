@@ -1,5 +1,7 @@
 import type { Doc } from "@naru/backend/data-model";
 
+import { GoalDraftCard } from "@/components/goals/GoalDraftCard";
+
 import { ReplyCard } from "./ReplyCard";
 import { RequestCard } from "./RequestCard";
 import { SplitCard } from "./SplitCard";
@@ -55,6 +57,12 @@ export function SocialEvent({
           </span>{" "}
           (not a verified Naru identity)
         </p>
+        {event.tip.goal && (
+          <p className="mt-1 text-xs text-muted-foreground">
+            Counted toward your goal{" "}
+            <span className="text-foreground">{event.tip.goal}</span>
+          </p>
+        )}
         <a
           className="mt-3 inline-block text-xs underline underline-offset-4"
           href={`https://stellar.expert/explorer/testnet/tx/${event.tip.hash}`}
@@ -65,6 +73,9 @@ export function SocialEvent({
         </a>
       </article>
     );
+
+  if (event.kind === "goal_draft" && event.goalId)
+    return <GoalDraftCard id={event.goalId} />;
 
   if (event.replyId) return <ReplyCard id={event.replyId} />;
 

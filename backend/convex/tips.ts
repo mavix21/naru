@@ -9,6 +9,7 @@ import {
   type QueryCtx,
 } from "./_generated/server";
 import { requireServer } from "./access";
+import { activeGoal, countContribution, publicGoal } from "./goals";
 import { parseAmount, TESTNET_ASSETS } from "./money";
 import { normalizeUsername, usernamePattern } from "./profileRules";
 import { deliver, throttle } from "./socialShared";
@@ -143,15 +144,36 @@ export const create = mutation({
     )
       throw new ConvexError("This tip review already exists.");
 
+    // Attribution is decided here, never by the browser, and never changes:
+    // archiving or replacing the goal later keeps this tip bound to it.
+    const goal = await activeGoal(ctx, profile._id);
+
     await ctx.db.insert("tips", {
       ...args,
       recipientProfileId: profile._id,
       recipientUserId: profile.clerkUserId,
       network: TESTNET_PASSPHRASE,
       token: TESTNET_ASSETS.USDC,
+      goalId: goal?._id,
       state: "review",
       updatedAt: Date.now(),
     });
+
+    return { goal: goal ? { title: goal.title } : null };
+  },
+});
+
+// The goal a checkout was bound to, as public amounts only.
+export const goal = query({
+  args: { key: v.string(), checkout: v.string() },
+  handler: async (ctx, { key, checkout }) => {
+    requireServer(key);
+    const tip = await byCheckout(ctx, checkout);
+    const goal = tip?.goalId && (await ctx.db.get(tip.goalId));
+
+    if (!goal) return null;
+
+    return { ...publicGoal(goal), active: goal.state === "active" };
   },
 });
 
@@ -229,13 +251,22 @@ export const finish = mutation({
       updatedAt: Date.now(),
     });
 
-    if (state === "confirmed") await deliverTip(ctx, tip);
+    if (state === "confirmed") {
+      // Same transaction as the state change: retries and concurrent
+      // reconciliations see `confirmed` above and never count twice.
+      const goal = await countContribution(ctx, tip);
+      await deliverTip(ctx, tip, goal?.title);
+    }
 
     return (await ctx.db.get(tip._id))!;
   },
 });
 
-async function deliverTip(ctx: MutationCtx, tip: Doc<"tips">) {
+async function deliverTip(
+  ctx: MutationCtx,
+  tip: Doc<"tips">,
+  goal: string | undefined,
+) {
   const companion = await ctx.db
     .query("companions")
     .withIndex("by_clerk_user", (q) => q.eq("clerkUserId", tip.recipientUserId))
@@ -256,6 +287,7 @@ async function deliverTip(ctx: MutationCtx, tip: Doc<"tips">) {
       asset: "USDC",
       hash: tip.hash,
       from: tip.sender,
+      goal,
     },
   });
 }
