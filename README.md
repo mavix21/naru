@@ -11,8 +11,7 @@ otras personas.**
 </p>
 
 [Explorar la interfaz](https://naru-app-kappa.vercel.app) ·
-[Video pitch](https://youtu.be/3jpPjH41-b4?si=T9mQOICz7EKsTd2F) ·
-[Video demo](https://youtu.be/T3Sl3tSe1pg?si=eWVtPePxf22GjoBg)
+[Video pitch](https://youtu.be/LZcUUsZMmSU)
 
 **Para el jurado:** [Funciones](#funciones-disponibles) ·
 [Recorrido](#prototipo-recorrido-para-el-jurado) ·
