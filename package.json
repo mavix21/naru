@@ -18,10 +18,10 @@
     "format:check": "oxfmt . --check --ignore-path=.oxfmtignore"
   },
   "devDependencies": {
-    "@oxlint/plugins": "1.85.0",
-    "oxfmt": "^0.70.0",
-    "oxlint": "1.85.0",
-    "turbo": "^2.11.3"
+    "@oxlint/plugins": "1.89.0",
+    "oxfmt": "^0.74.0",
+    "oxlint": "1.89.0",
+    "turbo": "^2.11.9"
   },
   "packageManager": "pnpm@11.25.0"
 }
